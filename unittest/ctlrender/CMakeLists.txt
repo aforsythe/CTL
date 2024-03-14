@@ -26,6 +26,7 @@ add_custom_target(ctlrender-build-time-make-directory ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CTLRENDER_OUTPUT_FOLDER})
 
 set(TEST_FILES "${PROJECT_SOURCE_DIR}/unittest/ctlrender")
+set(CTL_TEST_FILES "${PROJECT_SOURCE_DIR}/resources/test/ctl")
 
 foreach(J tiff8 tiff16 tiff32 dpx8 dpx10 dpx12 dpx16)
     foreach(I  bars_cinepaint_10.dpx bars_nuke_10_be.dpx bars_nuke_10_le.dpx bars_nuke_12_be.dpx bars_nuke_12_le.dpx bars_nuke_16_be.dpx bars_nuke_16_le.dpx bars_nuke_8_be.dpx bars_nuke_8_le.dpx bars_photoshop_16_be_interleaved.tif bars_photoshop_16_be_planar.tif bars_photoshop_16_le_interleaved.tif bars_photoshop_16_le_planar.tif bars_photoshop_32_be_interleaved.tif bars_photoshop_32_be_planar.tif bars_photoshop_32_le_interleaved.tif bars_photoshop_32_le_planar.tif bars_photoshop_8_be_interleaved.tif bars_photoshop_8_be_planar.tif bars_photoshop_8_le_interleaved.tif bars_photoshop_8_le_planar.tif)
@@ -126,3 +127,6 @@ if(OpenEXR_FOUND)
     add_test(NAME "ctlrender-invalid-output-filename-exr" COMMAND ctlrender -force -format exr -ctl "${TEST_FILES}/unity.ctl" "${TEST_FILES}/colorbars_nuke_rgb_exr16.exr" "${CTLRENDER_OUTPUT_FOLDER}/missing_folder/invalid_filename_out.exr")
     set_tests_properties("ctlrender-invalid-output-filename-exr" PROPERTIES WILL_FAIL TRUE)
 endif()
+
+# Test with make_gamma.ctl
+add_test(NAME "ctlrender-EXR16->EXR16-make_gamma.ctl" COMMAND ${CTLRENDER_PATH} -ctl "${CTL_TEST_FILES}/make_gamma.ctl" -format exr16 -force "${TEST_FILES}/colorbars_nuke_rgb_exr16.exr" "${CTLRENDER_OUTPUT_FOLDER}/bars_rgb_exr16_to_exr16.make_gamma.exr")
