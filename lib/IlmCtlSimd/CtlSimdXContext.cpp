@@ -241,10 +241,10 @@ SimdXContext::countInstruction ()
     {
 	if (_maxInstCount && _instCount > _maxInstCount)
     {
-        char exception_explaination[1024] = {'\0'};
-        snprintf(exception_explaination, 1024, 
-        "\nException Ctl::MaxInstExc thrown\nMaximum CTL instruction count _maxInstCount=%d exceeded, _instCount = %d. \nTry increasing SimdInterpreter::Data->maxInstCount\n", _maxInstCount, _instCount);
-	    THROW( Ctl::MaxInstExc, exception_explaination );
+        THROW( Ctl::MaxInstExc, "\nException Ctl::MaxInstExc thrown\n" << 
+            "Maximum CTL instruction count _maxInstCount=" << _maxInstCount << 
+            " exceeded, _instCount=" << _instCount << "\n" <<
+            "Try increasing SimdInterpreter::Data->maxInstCount\n" );
     }
 	if (_abortCount != _interpreter.abortCount())
 	    throw Ctl::AbortExc ("CTL program aborted.");
