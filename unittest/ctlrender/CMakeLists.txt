@@ -146,3 +146,31 @@ endif()
 add_test(NAME "ctlrender-maxInstCount-exception" COMMAND ctlrender -force -ctl "${PROJECT_SOURCE_DIR}/resources/test/ctl/throw_maxInstCount_exception.ctl" "${PROJECT_SOURCE_DIR}/resources/test/exr/colorbars_nuke_rgb_exr16.exr" "${CTLRENDER_OUTPUT_FOLDER}/maxInstCount_exception.exr")
 set_tests_properties("ctlrender-maxInstCount-exception" PROPERTIES WILL_FAIL TRUE)
 
+# Phase B: tile-parallel dispatch must produce byte-identical output for
+# any -threads N on a fixture that spans multiple tiles (maxSamples=4096,
+# so >4096 pixels). Runs the same transform at several thread counts and
+# compares the resulting EXRs byte-for-byte against the N=1 reference.
+if(OpenEXR_FOUND)
+    set(THREADED_PARITY_REF "${CTLRENDER_OUTPUT_FOLDER}/threaded_parity_ref.exr")
+    add_test(NAME "ctlrender-threaded-parity-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                -format exr32 -force -threads 1
+                "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
+                "${THREADED_PARITY_REF}")
+    foreach(N 2 4 8 12)
+        set(OUT "${CTLRENDER_OUTPUT_FOLDER}/threaded_parity_t${N}.exr")
+        add_test(NAME "ctlrender-threaded-parity-t${N}-run"
+            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                    -format exr32 -force -threads ${N}
+                    "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
+                    "${OUT}")
+        add_test(NAME "ctlrender-threaded-parity-t${N}-cmp"
+            COMMAND ${CMAKE_COMMAND} -E compare_files
+                    "${THREADED_PARITY_REF}" "${OUT}")
+        set_tests_properties("ctlrender-threaded-parity-t${N}-run"
+            PROPERTIES DEPENDS "ctlrender-threaded-parity-ref")
+        set_tests_properties("ctlrender-threaded-parity-t${N}-cmp"
+            PROPERTIES DEPENDS "ctlrender-threaded-parity-t${N}-run")
+    endforeach()
+endif()
+

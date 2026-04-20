@@ -62,7 +62,11 @@
 #include <CtlFunctionCall.h>
 #include <CtlSimdInterpreter.h>
 #include <CtlStdType.h>
+#include <atomic>
 #include <exception>
+#include <mutex>
+#include <thread>
+#include <vector>
 #include <Iex.h>
 #include <string.h>
 #include <stdlib.h>
@@ -71,6 +75,8 @@
 #ifdef _WIN32
 	#define strcasecmp _stricmp
 #endif
+
+extern int num_threads;
 
 class CTLResult;
 typedef Ctl::RcPtr<CTLResult> CTLResultPtr;
@@ -324,9 +330,26 @@ void set_ctl_results_from_ctl_function_argument(CTLResults *ctl_results, const C
 	ctl_result->data->copy(arg, 0, offset, count);
 }
 
-void run_ctl_transform(const ctl_operation_t &ctl_operation, CTLResults *ctl_results, size_t count)
+// Out-of-line so the std::map<..., std::unique_ptr<SimdInterpreter>> member's
+// destructor is instantiated in this TU where SimdInterpreter is complete.
+InterpreterCache::InterpreterCache() = default;
+InterpreterCache::~InterpreterCache() = default;
+
+void InterpreterCache::preWarm(const char *filename)
 {
-	Ctl::SimdInterpreter interpreter;
+    auto &slot = byFilename[std::string(filename)];
+    if (!slot)
+    {
+        slot.reset(new Ctl::SimdInterpreter);
+        slot->loadFile(filename);
+    }
+}
+
+void run_ctl_transform(const ctl_operation_t &ctl_operation,
+                       CTLResults *ctl_results, size_t count,
+                       InterpreterCache *cache)
+{
+	Ctl::SimdInterpreter *interpreter = nullptr;
 	Ctl::FunctionCallPtr fn;
 	Ctl::FunctionArgPtr arg;
 	CTLResults::iterator results_iter;
@@ -366,7 +389,24 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation, CTLResults *ctl_res
 		}
         
         
-        interpreter.loadFile(ctl_operation.filename);
+        // Reuse any cached, already-loaded interpreter for this script.
+        // Each distinct ctl_operation.filename gets its own interpreter so
+        // that unqualified newFunctionCall("main") lookups do not collide
+        // across scripts in the same pipeline.
+        {
+            auto it = cache->byFilename.find(ctl_operation.filename);
+            if (it == cache->byFilename.end())
+            {
+                auto fresh = std::unique_ptr<Ctl::SimdInterpreter>(
+                    new Ctl::SimdInterpreter);
+                fresh->loadFile(ctl_operation.filename);
+                it = cache->byFilename.emplace(
+                    std::string(ctl_operation.filename),
+                    std::move(fresh)).first;
+            }
+            interpreter = it->second.get();
+        }
+
         try
         {
             // It's probably broken that you can't get a list of the function
@@ -376,7 +416,7 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation, CTLResults *ctl_res
             // for a 'main' function, and failing that, a function named whatever
             // the ctl file is named. This is probably not ideal. The 'main'
             // function convention is used by 'toxik'
-            fn = interpreter.newFunctionCall(std::string("main"));
+            fn = interpreter->newFunctionCall(std::string("main"));
         }
         catch (const Iex::ArgExc &e)
         {
@@ -386,17 +426,17 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation, CTLResults *ctl_res
                 fprintf(stderr, "No function named main() found, trying <module_name> (%s) instead\n", module);
             }
         }
-        
+
         try {
             if (fn.refcount() == 0)
             {
-                fn = interpreter.newFunctionCall(std::string(module));
+                fn = interpreter->newFunctionCall(std::string(module));
             }
         } catch (...) {
 			char message_text[512] = {'\0'};
 			snprintf( message_text, 512, "CTL file must contain either a main or <module_name> (%s) function", module);
             THROW(Iex::ArgExc, message_text);
-        }		
+        }
 
 		if (fn->returnValue()->type().cast<Ctl::VoidType>().refcount() == 0)
 		{
@@ -457,30 +497,131 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation, CTLResults *ctl_res
 
 		//	fprintf(stderr, "%d samples to go.\n", count);
 
-		size_t offset = 0;
-		while (offset < count)
+		const size_t max_samples = interpreter->maxSamples();
+		auto process_tile = [&](Ctl::FunctionCallPtr tile_fn, size_t offset, size_t pass)
 		{
-			size_t pass = interpreter.maxSamples();
-			if (pass > (count - offset))
+			for (size_t i = 0; i < tile_fn->numInputArgs(); i++)
 			{
-				pass = (count - offset);
+				Ctl::FunctionArgPtr tile_arg = tile_fn->inputArg(i);
+				set_ctl_function_argument_from_ctl_results(&tile_arg, *ctl_results, offset, pass);
 			}
-//		fprintf(stderr, "at offset %d doing %d samples\n", offset, pass);
-			for (size_t i = 0; i < fn->numInputArgs(); i++)
+			tile_fn->callFunction(pass);
+			for (size_t i = 0; i < tile_fn->numOutputArgs(); i++)
 			{
-				arg = fn->inputArg(i);
-				set_ctl_function_argument_from_ctl_results(&arg, *ctl_results, offset, pass);
+				set_ctl_results_from_ctl_function_argument(&new_ctl_results, tile_fn->outputArg(i), offset, pass, count);
+			}
+		};
+
+		// First tile runs serially on fn. This call is what builds out
+		// new_ctl_results' entries (list structure mutation); later tiles
+		// only update disjoint slices of existing entries, so the list
+		// structure is stable during any parallel phase below.
+		size_t offset = 0;
+		if (offset < count)
+		{
+			size_t pass = max_samples;
+			if (pass > (count - offset)) pass = (count - offset);
+			process_tile(fn, offset, pass);
+			offset += pass;
+		}
+
+		// Determine worker count. num_threads<=0 means autoselect; 1 keeps
+		// the current single-threaded behavior for bit-exact reproducibility.
+		size_t worker_count = 1;
+		if (num_threads > 1)
+		{
+			worker_count = static_cast<size_t>(num_threads);
+		}
+		else if (num_threads <= 0)
+		{
+			unsigned hw = std::thread::hardware_concurrency();
+			if (hw > 1) worker_count = hw;
+		}
+
+		if (offset < count && worker_count > 1)
+		{
+			// Pre-compute the remaining tile boundaries so workers just
+			// fetch_add an index into this vector.
+			std::vector<std::pair<size_t, size_t> > tiles; // (offset, pass)
+			for (size_t o = offset; o < count; )
+			{
+				size_t p = max_samples;
+				if (p > (count - o)) p = (count - o);
+				tiles.emplace_back(o, p);
+				o += p;
 			}
 
-			fn->callFunction(pass);
+			// Cap workers to tile count — more threads than tiles wastes
+			// spawn cost for threads that do no work.
+			if (worker_count > tiles.size()) worker_count = tiles.size();
 
-			for (size_t i = 0; i < fn->numOutputArgs(); i++)
+			// One FunctionCall per worker. Main thread is worker 0 and
+			// reuses `fn`; others get a fresh newFunctionCall. The
+			// Interpreter serializes newFunctionCall() internally, so
+			// creating them before spawn is safe.
+			std::vector<Ctl::FunctionCallPtr> worker_fns;
+			worker_fns.reserve(worker_count);
+			worker_fns.push_back(fn);
+			for (size_t w = 1; w < worker_count; w++)
 			{
-				//printf("setting results from function argument\n");
-				set_ctl_results_from_ctl_function_argument(&new_ctl_results, fn->outputArg(i), offset, pass, count);
+				Ctl::FunctionCallPtr wfn = interpreter->newFunctionCall(fn->name());
+				worker_fns.push_back(wfn);
+
+				// Prime each fresh FunctionCall with any uniform / default
+				// inputs. The per-tile loop only sets varying inputs each
+				// tile; uniform inputs are copied once at offset=0 and
+				// then persist. Workers that only ever see offset>0 tiles
+				// would otherwise have uninitialised uniforms.
+				for (size_t i = 0; i < wfn->numInputArgs(); i++)
+				{
+					Ctl::FunctionArgPtr warg = wfn->inputArg(i);
+					set_ctl_function_argument_from_ctl_results(&warg, *ctl_results, 0, max_samples);
+				}
 			}
 
-			offset = offset + pass;
+			std::atomic<size_t> next_tile(0);
+			std::atomic<bool>   aborted(false);
+			std::mutex          err_mutex;
+			std::exception_ptr  first_err;
+
+			auto worker = [&](size_t widx)
+			{
+				try
+				{
+					Ctl::FunctionCallPtr wfn = worker_fns[widx];
+					while (!aborted.load(std::memory_order_relaxed))
+					{
+						size_t idx = next_tile.fetch_add(1, std::memory_order_relaxed);
+						if (idx >= tiles.size()) return;
+						process_tile(wfn, tiles[idx].first, tiles[idx].second);
+					}
+				}
+				catch (...)
+				{
+					std::lock_guard<std::mutex> lock(err_mutex);
+					if (!first_err) first_err = std::current_exception();
+					aborted.store(true, std::memory_order_relaxed);
+				}
+			};
+
+			std::vector<std::thread> pool;
+			pool.reserve(worker_count - 1);
+			for (size_t w = 1; w < worker_count; w++) pool.emplace_back(worker, w);
+			worker(0);
+			for (auto &t : pool) t.join();
+
+			if (first_err) std::rethrow_exception(first_err);
+		}
+		else
+		{
+			// Single-threaded path (bit-exact with pre-Phase-B behaviour).
+			while (offset < count)
+			{
+				size_t pass = max_samples;
+				if (pass > (count - offset)) pass = (count - offset);
+				process_tile(fn, offset, pass);
+				offset += pass;
+			}
 		}
 		*ctl_results = new_ctl_results;
 	}
@@ -693,7 +834,8 @@ void transform(const char *inputFile, const char *outputFile,
 		       format_t *image_format,
                Compression *compression,
 		       const CTLOperations &ctl_operations,
-		       const CTLParameters &global_parameters)
+		       const CTLParameters &global_parameters,
+		       InterpreterCache *cache)
 {
 	CTLOperations::const_iterator operations_iter;
 	ctl_operation_t ctl_operation;
@@ -828,7 +970,7 @@ void transform(const char *inputFile, const char *outputFile,
 		}
 
 		// Output is used to pass output parameters from script to the next.
-		run_ctl_transform(*operations_iter, &ctl_results, image_buffer.pixels());
+		run_ctl_transform(*operations_iter, &ctl_results, image_buffer.pixels(), cache);
 	}
 
 	mkimage(&image_buffer, ctl_results, image_format);

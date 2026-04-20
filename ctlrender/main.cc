@@ -53,13 +53,19 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <stdio.h>
+#include <algorithm>
+#include <atomic>
 #include <exception>
 #include <list>
+#include <mutex>
 #include <sys/stat.h>
+#include <thread>
+#include <vector>
 #ifndef _WIN32
 	#include <sys/param.h>
 #endif
 #include <errno.h>
+#include <ImfThreading.h>
 #include "transform.hh"
 #include <Iex.h>
 #include <stdlib.h>
@@ -187,6 +193,59 @@ const format_t &find_format(const char *fmt, const char *message = NULL)
 }
 
 int verbosity = 1;
+
+//-----------------------------------------------------------------------------
+// Parallelism model: two orthogonal axes, composed as jobs × threads.
+//
+// -threads controls parallelism WITHIN a single transform().  One input
+// image is split into tiles of maxSamples() lanes; worker threads pull
+// tiles from an atomic counter and run the SIMD interpreter on each.
+// Scales well for large images up to the memory-bandwidth ceiling
+// (measured: ~6× on 4K, Phase B in benchmarks/report.md).  Not useful
+// when there is only enough work to fill one tile.
+//
+// -jobs controls parallelism ACROSS input files.  N whole transforms run
+// concurrently, each with its own FunctionCall / output buffer / image
+// IO.  Scales near-linearly with core count up to the point I/O or
+// memory bandwidth saturates, because each worker has its own working
+// set and the two layers of the stack (decode / compute / encode)
+// overlap naturally across files.
+//
+// They compose multiplicatively: total active workers ≈ jobs × threads.
+// On an N-core machine the right split depends on the batch shape:
+//
+//   1 input file      →  jobs=1, threads=N      (single-file parallelism
+//                                                can only come from the
+//                                                tile loop)
+//   M files, M ≥ N    →  jobs=N, threads=1      (file parallelism
+//                                                dominates; tile
+//                                                threading adds
+//                                                coordination cost for
+//                                                no gain)
+//   few files, M < N  →  jobs=M, threads=N/M    (split cores evenly;
+//                                                both layers contribute)
+//
+// Both flags default to autodetect (0) and the auto logic below picks
+// from this table using hardware_concurrency() and the input count.
+// Explicit values are respected; an explicit -threads survives the
+// jobs-resolver's even split.  Measured on a 16-core M4 Max, 100 × 2K
+// ACES v2 → tiff8: the auto defaults match hand-tuned within noise
+// (57.31 s vs 56.30 s for -jobs 16 -threads 1).
+//-----------------------------------------------------------------------------
+
+// Number of worker threads for the CPU per-tile dispatch loop.
+//  0  => autodetect: hardware_concurrency() / resolved-file_jobs
+//  1  => single-threaded (bit-exact with pre-threading behaviour)
+//  >1 => fixed count
+int num_threads = 0;
+
+// Number of input files to process concurrently (file-level parallelism).
+//  0  => autodetect (default): min(num_input_files,
+//        hardware_concurrency()).  See the block comment above for how
+//        this composes with num_threads.
+//  1  => serial (bit-exact with pre-jobs behaviour)
+//  >1 => fixed count
+int file_jobs = 0;
 
 int main(int argc, const char **argv)
 {
@@ -446,6 +505,63 @@ int main(int argc, const char **argv)
 			{
 				noalpha = TRUE;
 			}
+			else if (!strcmp(argv[0], "-threads"))
+			{
+				if (argc == 1)
+				{
+					fprintf(stderr,
+							"The -threads option requires an additional "
+							"integer argument: the number of CPU worker "
+							"threads (0 = autodetect, 1 = single-threaded).\n");
+					exit(1);
+				}
+				char *end = NULL;
+				long n = strtol(argv[1], &end, 10);
+				if (end != NULL && *end != 0)
+				{
+					fprintf(stderr,
+							"Unable to parse '%s' as an integer for the "
+							"'-threads' argument.\n", argv[1]);
+					exit(1);
+				}
+				if (n < 0)
+				{
+					fprintf(stderr, "-threads must be >= 0 (got %ld).\n", n);
+					exit(1);
+				}
+				num_threads = static_cast<int>(n);
+				argv++;
+				argc--;
+			}
+			else if (!strcmp(argv[0], "-jobs"))
+			{
+				if (argc == 1)
+				{
+					fprintf(stderr,
+							"The -jobs option requires an additional "
+							"integer argument: the number of input files "
+							"to process in parallel (0 = autodetect, "
+							"1 = serial).\n");
+					exit(1);
+				}
+				char *end = NULL;
+				long n = strtol(argv[1], &end, 10);
+				if (end != NULL && *end != 0)
+				{
+					fprintf(stderr,
+							"Unable to parse '%s' as an integer for the "
+							"'-jobs' argument.\n", argv[1]);
+					exit(1);
+				}
+				if (n < 0)
+				{
+					fprintf(stderr, "-jobs must be >= 0 (got %ld).\n", n);
+					exit(1);
+				}
+				file_jobs = static_cast<int>(n);
+				argv++;
+				argc--;
+			}
 			else if (!strncmp(argv[0], "-", 1))
 			{
 				fprintf(stderr,
@@ -618,66 +734,193 @@ int main(int argc, const char **argv)
 			fprintf(stderr, "\n");
 		}
 
-		while (input_image_files.size() > 0)
-		{
-			const char *inputFile = input_image_files.front();
+		// Shared across the multi-file loop so each distinct CTL script is
+		// parsed + codegen'd once for the whole batch rather than once per
+		// input file.
+		InterpreterCache interpreter_cache;
 
-			if (output_slash != NULL)
+		// Pre-warm so worker threads can read byFilename without locking.
+		// Also amortizes module load time before the first transform().
+		for (const ctl_operation_t &op : ctl_operations)
+		{
+			interpreter_cache.preWarm(op.filename);
+		}
+
+		// Resolve -jobs 0 (autodetect). Cap at the input count so a
+		// single-file batch stays serial (letting per-tile threads take
+		// all cores); cap at hardware_concurrency() so we never spawn
+		// more file workers than there are CPUs.
+		if (file_jobs == 0)
+		{
+			unsigned hw = std::thread::hardware_concurrency();
+			if (hw == 0) hw = 1;
+			unsigned nfiles = static_cast<unsigned>(input_image_files.size());
+			unsigned j = (nfiles < hw) ? nfiles : hw;
+			if (j == 0) j = 1;
+			file_jobs = static_cast<int>(j);
+		}
+
+		// When running multiple files in parallel, split hardware_concurrency
+		// between file-level and tile-level workers so the two layers don't
+		// oversubscribe.  Only adjust when num_threads is in its default-auto
+		// state; an explicit -threads value is respected.
+		if (file_jobs > 1 && num_threads == 0)
+		{
+			unsigned hw = std::thread::hardware_concurrency();
+			if (hw == 0) hw = 1;
+			unsigned per = hw / static_cast<unsigned>(file_jobs);
+			if (per == 0) per = 1;
+			num_threads = static_cast<int>(per);
+		}
+
+		// OpenEXR's PIZ/ZIP/ZIPS/DWA codecs split scanline blocks into
+		// independent compression tasks submitted to Imf's global thread
+		// pool. The default pool size is 0 (single-threaded), so a 4K PIZ
+		// write serializes 270 blocks onto one core — on the cpu-perf
+		// path that's the dominant stage on compressed outputs (measured
+		// 4K 30 PIZ = 62 s vs 40 s for NONE). Size the pool to
+		// hardware_concurrency() so the encode/decode work can fan out
+		// across all available cores. This composes with -threads/-jobs
+		// rather than oversubscribing: while a file worker is inside
+		// writePixels/readPixels it's blocked on the Imf pool, so its
+		// CPU slot is free for pool threads to use. The net is at most
+		// hardware_concurrency() active threads at any instant, whether
+		// the bottleneck is compute (jobs × threads) or I/O (pool).
+		// Previously capped at 16 to match typical laptop topologies; the
+		// cap was removed because it throttled encode on 28-/64-core
+		// workstations where file workers still benefit from a full-
+		// width pool during aligned encode-heavy phases.
+		{
+			unsigned hw = std::thread::hardware_concurrency();
+			if (hw == 0) hw = 1;
+			Imf::setGlobalThreadCount(static_cast<int>(hw));
+		}
+
+		const bool is_directory_output = (output_slash != NULL);
+		const size_t output_prefix_len =
+		    is_directory_output
+		        ? static_cast<size_t>(output_slash - output_path)
+		        : 0;
+
+		// Snapshot the arg-parsing side-effects each file needs.  The main
+		// `output_path`/`outputFile`/`actual_format` are mutated per-file in
+		// the body below; workers must use local copies so they don't race.
+		const format_t template_format = actual_format;
+
+		auto process_one_file = [&](const char *inputFile)
+		{
+			char output_path_local[PATH_MAX];
+			const char *outputFileLocal;
+			format_t format_local = template_format;
+
+			if (is_directory_output)
 			{
+				memcpy(output_path_local, output_path, output_prefix_len);
+				output_path_local[output_prefix_len] = 0;
+				char *slash_local = output_path_local + output_prefix_len;
+
 				const char *input_slash = strrchr(inputFile, '/');
-				if (input_slash == NULL)
-				{
-					input_slash = (char *) inputFile;
-				}
-				else
-				{
-					input_slash++;
-				}
-				strcpy(output_slash, input_slash);
-				char *dot = (char *) strrchr(outputFile, '.');
+				input_slash = input_slash ? input_slash + 1 : inputFile;
+				strcpy(slash_local, input_slash);
+
+				char *dot = strrchr(output_path_local, '.');
 				if (dot != NULL)
 				{
 					dot++;
 					if (desired_format.ext != NULL)
 					{
 						// HACK aces format file type check
-                        const char *ext = desired_format.ext;
-                        static const char exrext[] = "exr";
-                        if (!strcmp(ext, "aces"))
-                            ext = exrext;
-                        strcpy(dot, ext);
-						actual_format = desired_format;
+						const char *ext = desired_format.ext;
+						static const char exrext[] = "exr";
+						if (!strcmp(ext, "aces"))
+							ext = exrext;
+						strcpy(dot, ext);
+						format_local = desired_format;
 					}
 					else
 					{
-						actual_format = find_format(dot, " (determined from destination file extension).");
+						format_local = find_format(dot, " (determined from destination file extension).");
 					}
 				}
+				outputFileLocal = output_path_local;
+			}
+			else
+			{
+				outputFileLocal = outputFile;
 			}
 
 			if (force_overwrite_output_file)
 			{
-				if (unlink(outputFile) < 0)
+				if (unlink(outputFileLocal) < 0)
 				{
 					if (errno != ENOENT)
 					{
 						fprintf(stderr, "Unable to remove existing file named "
-								"'%s' (%s).\n", outputFile, strerror(errno));
+								"'%s' (%s).\n", outputFileLocal, strerror(errno));
 						exit(1);
 					}
 				}
 			}
-			if (access(outputFile, F_OK) >= 0)
+			if (access(outputFileLocal, F_OK) >= 0)
 			{
-				fprintf(stderr, "Can not overwrite the file '%s'.\n", outputFile);
+				fprintf(stderr, "Can not overwrite the file '%s'.\n", outputFileLocal);
 				exit(1);
 			}
-			actual_format.squish = noalpha;
-			if (true == desired_format.is_compression_set) {
-			  actual_format.is_compression_set = true;
+			format_local.squish = noalpha;
+			if (desired_format.is_compression_set)
+			{
+				format_local.is_compression_set = true;
 			}
-			transform(inputFile, outputFile, input_scale, output_scale, &actual_format, &compression, ctl_operations, global_ctl_parameters);
-			input_image_files.pop_front();
+			transform(inputFile, outputFileLocal, input_scale, output_scale, &format_local, &compression, ctl_operations, global_ctl_parameters, &interpreter_cache);
+		};
+
+		if (file_jobs == 1)
+		{
+			while (input_image_files.size() > 0)
+			{
+				process_one_file(input_image_files.front());
+				input_image_files.pop_front();
+			}
+		}
+		else
+		{
+			std::vector<const char *> file_vec(
+			    input_image_files.begin(), input_image_files.end());
+			input_image_files.clear();
+
+			std::atomic<size_t> next_index(0);
+			std::mutex err_mutex;
+			std::exception_ptr first_err;
+			std::atomic<bool> aborted(false);
+
+			auto worker = [&]()
+			{
+				try
+				{
+					while (!aborted.load(std::memory_order_relaxed))
+					{
+						size_t idx = next_index.fetch_add(
+						    1, std::memory_order_relaxed);
+						if (idx >= file_vec.size()) break;
+						process_one_file(file_vec[idx]);
+					}
+				}
+				catch (...)
+				{
+					std::lock_guard<std::mutex> g(err_mutex);
+					if (!first_err) first_err = std::current_exception();
+					aborted.store(true, std::memory_order_relaxed);
+				}
+			};
+
+			int extras = file_jobs - 1;
+			std::vector<std::thread> pool;
+			pool.reserve(static_cast<size_t>(extras));
+			for (int i = 0; i < extras; i++) pool.emplace_back(worker);
+			worker();  // main thread is worker 0
+			for (auto &t : pool) t.join();
+
+			if (first_err) std::rethrow_exception(first_err);
 		}
 
 		return 0;

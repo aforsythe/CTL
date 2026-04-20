@@ -2,6 +2,7 @@ set(SOURCES
 	main.cpp
 	testAffineRec.cpp
 	testGaussRec.cpp
+	testMathVectorParity.cpp
 )
 
 add_executable(IlmCtlMathTest ${SOURCES})
@@ -27,5 +28,18 @@ target_link_libraries(IlmCtlMathTest
       $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
       $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>
 )
+
+# testMathVectorParity validates whichever vectorized transcendental
+# backend was compiled into IlmCtlSimd against scalar libm.  It calls
+# the vendor entry points directly (vvexpf / Sleef_expf4_u10*), so it
+# needs the same compile definitions and libraries as IlmCtlSimd.
+if(CTL_USE_ACCELERATE)
+	target_compile_definitions(IlmCtlMathTest PRIVATE CTL_USE_ACCELERATE=1)
+	target_link_libraries(IlmCtlMathTest PRIVATE "-framework Accelerate")
+endif()
+if(CTL_USE_SLEEF)
+	target_compile_definitions(IlmCtlMathTest PRIVATE CTL_USE_SLEEF=1)
+	target_link_libraries(IlmCtlMathTest PRIVATE sleef::sleef)
+endif()
 
 add_test(IlmCtlMath IlmCtlMathTest)
