@@ -57,7 +57,32 @@
 
 #include <list>
 #include <cstring>
+#include <map>
+#include <memory>
+#include <string>
 #include "main.hh"
+
+namespace Ctl { class SimdInterpreter; }
+
+// Per-process cache of parsed+codegen'd CTL modules, keyed on
+// ctl_operation_t::filename.  Populated lazily by run_ctl_transform();
+// lets a multi-file batch pay module load (150-500 ms for aces_combined)
+// once per distinct CTL script instead of once per (input file x op).
+// Each CTL script gets its own SimdInterpreter so that unqualified
+// symbol lookups (e.g. newFunctionCall("main")) do not collide across
+// scripts in the same pipeline.
+struct InterpreterCache
+{
+    std::map<std::string, std::unique_ptr<Ctl::SimdInterpreter>> byFilename;
+    InterpreterCache();
+    ~InterpreterCache();
+
+    // Eagerly parse+codegen `filename` into byFilename.  Main-thread only.
+    // Call once per distinct ctl script before any parallel dispatch; after
+    // that, worker threads can read byFilename without synchronization
+    // because run_ctl_transform's find will always hit an existing entry.
+    void preWarm(const char *filename);
+};
 
 // structure to capture a CTL parameter.
 // A parameter consists of a name and up to 4 floating point values.
@@ -96,6 +121,7 @@ void transform(const char *inputFile, const char *outputFile,
 		       float input_scale, float output_scale,
 		       format_t *format,
                Compression *compression,
-		       const CTLOperations &ops, const CTLParameters &global);
+		       const CTLOperations &ops, const CTLParameters &global,
+		       InterpreterCache *cache);
 
 #endif

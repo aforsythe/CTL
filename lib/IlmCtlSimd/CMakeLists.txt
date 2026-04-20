@@ -36,6 +36,7 @@
 
 set(SOURCES
 	CtlSimdAddr.cpp
+	CtlSimdArena.cpp
 	CtlSimdFunctionCall.cpp
 	CtlSimdHalfExpLog.cpp
 	CtlSimdInst.cpp
@@ -85,6 +86,22 @@ target_link_libraries(IlmCtlSimd
           $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
           $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>
 )
+
+if(CTL_USE_ACCELERATE)
+	target_compile_definitions(IlmCtlSimd PRIVATE CTL_USE_ACCELERATE=1)
+	target_link_libraries(IlmCtlSimd PRIVATE "-framework Accelerate")
+endif()
+
+if(CTL_USE_SLEEF)
+	target_compile_definitions(IlmCtlSimd PRIVATE
+		CTL_USE_SLEEF=1
+		CTL_SLEEF_ULP=${CTL_SLEEF_ULP})
+	if(TARGET sleef::sleef)
+		target_link_libraries(IlmCtlSimd PRIVATE sleef::sleef)
+	else()
+		target_link_libraries(IlmCtlSimd PRIVATE sleef)
+	endif()
+endif()
 
 set_target_properties(IlmCtlSimd
 	PROPERTIES
