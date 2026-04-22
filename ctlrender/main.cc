@@ -1286,6 +1286,17 @@ int main(int argc, const char **argv)
 			bool decDone = false, encDone = false;
 			constexpr size_t kQCap = 1;
 
+			// Optional per-stage timing (CTL_METAL_TIMING=1).  Aggregated
+			// across the batch so we can see which of decode / compute /
+			// encode pins the pipeline.  Sum of busy microseconds per
+			// stage plus frame count; the ratio of (max stage busy) to
+			// (pipeline wall-clock) tells us pipeline efficiency.
+			const bool timing_enabled =
+			    (std::getenv("CTL_METAL_TIMING") != nullptr);
+			std::atomic<uint64_t> dec_us(0), cmp_us(0), enc_us(0);
+			std::atomic<uint64_t> dec_n(0), cmp_n(0), enc_n(0);
+			const auto pipeline_t0 = std::chrono::steady_clock::now();
+
 			std::exception_ptr first_err;
 			std::mutex errMu;
 			std::atomic<bool> aborted(false);
@@ -1312,8 +1323,17 @@ int main(int argc, const char **argv)
 						prep_item(i, file_vec[i], item->outputFile,
 						          item->format);
 
-						transform_metal_decode(item->inputFile, input_scale,
-						                       &item->format, &item->buffer);
+						{
+							const auto t0 = std::chrono::steady_clock::now();
+							transform_metal_decode(item->inputFile, input_scale,
+							                       &item->format, &item->buffer);
+							const auto t1 = std::chrono::steady_clock::now();
+							dec_us.fetch_add(
+							    std::chrono::duration_cast<std::chrono::microseconds>(
+							        t1 - t0).count(),
+							    std::memory_order_relaxed);
+							dec_n.fetch_add(1, std::memory_order_relaxed);
+						}
 
 						std::unique_lock<std::mutex> lk(decQMu);
 						decQCv.wait(lk, [&]{
@@ -1358,9 +1378,18 @@ int main(int argc, const char **argv)
 						lk.unlock();
 						encQCv.notify_all();
 
-						transform_metal_encode(item->outputFile.c_str(),
-						                       output_scale, &item->format,
-						                       &compression, &item->buffer);
+						{
+							const auto t0 = std::chrono::steady_clock::now();
+							transform_metal_encode(item->outputFile.c_str(),
+							                       output_scale, &item->format,
+							                       &compression, &item->buffer);
+							const auto t1 = std::chrono::steady_clock::now();
+							enc_us.fetch_add(
+							    std::chrono::duration_cast<std::chrono::microseconds>(
+							        t1 - t0).count(),
+							    std::memory_order_relaxed);
+							enc_n.fetch_add(1, std::memory_order_relaxed);
+						}
 					}
 				}
 				catch (...)
@@ -1475,10 +1504,19 @@ int main(int argc, const char **argv)
 					}
 					decQCv.notify_all();
 
-					transform_metal_compute(interpreter_cache,
-					                        ctl_operations,
-					                        global_ctl_parameters,
-					                        &item->format, &item->buffer);
+					{
+						const auto t0 = std::chrono::steady_clock::now();
+						transform_metal_compute(interpreter_cache,
+						                        ctl_operations,
+						                        global_ctl_parameters,
+						                        &item->format, &item->buffer);
+						const auto t1 = std::chrono::steady_clock::now();
+						cmp_us.fetch_add(
+						    std::chrono::duration_cast<std::chrono::microseconds>(
+						        t1 - t0).count(),
+						    std::memory_order_relaxed);
+						cmp_n.fetch_add(1, std::memory_order_relaxed);
+					}
 
 					{
 						std::unique_lock<std::mutex> lk(encQMu);
@@ -1506,6 +1544,45 @@ int main(int argc, const char **argv)
 			encThr.join();
 
 			if (first_err) std::rethrow_exception(first_err);
+
+			if (timing_enabled)
+			{
+				const auto pipeline_t1 =
+				    std::chrono::steady_clock::now();
+				const double wall_ms =
+				    std::chrono::duration<double, std::milli>(
+				        pipeline_t1 - pipeline_t0).count();
+				const uint64_t d_us = dec_us.load(std::memory_order_relaxed);
+				const uint64_t c_us = cmp_us.load(std::memory_order_relaxed);
+				const uint64_t e_us = enc_us.load(std::memory_order_relaxed);
+				const uint64_t d_n  = dec_n.load(std::memory_order_relaxed);
+				const uint64_t c_n  = cmp_n.load(std::memory_order_relaxed);
+				const uint64_t e_n  = enc_n.load(std::memory_order_relaxed);
+				fprintf(stderr, "\n=== CTL_METAL_TIMING ===\n");
+				fprintf(stderr, "pipeline wall       : %9.2f ms\n",
+				        wall_ms);
+				fprintf(stderr, "decode  total/frame : %9.2f ms  /  %6.2f ms  (n=%llu)\n",
+				        d_us / 1000.0,
+				        d_n ? (d_us / 1000.0 / double(d_n)) : 0.0,
+				        (unsigned long long)d_n);
+				fprintf(stderr, "compute total/frame : %9.2f ms  /  %6.2f ms  (n=%llu)\n",
+				        c_us / 1000.0,
+				        c_n ? (c_us / 1000.0 / double(c_n)) : 0.0,
+				        (unsigned long long)c_n);
+				fprintf(stderr, "encode  total/frame : %9.2f ms  /  %6.2f ms  (n=%llu)\n",
+				        e_us / 1000.0,
+				        e_n ? (e_us / 1000.0 / double(e_n)) : 0.0,
+				        (unsigned long long)e_n);
+				// Pipeline efficiency = max(stage_sum) / wall.  If close
+				// to 1.0 the longest stage saturates wall; if < 1.0 there
+				// is pipeline bubble / stall.
+				const uint64_t max_us = std::max({d_us, c_us, e_us});
+				fprintf(stderr, "longest stage busy  : %9.2f ms\n",
+				        max_us / 1000.0);
+				fprintf(stderr, "pipeline efficiency : %9.2f  (longest/wall; 1.0 = saturating)\n",
+				        wall_ms > 0.0 ? (max_us / 1000.0 / wall_ms) : 0.0);
+				fprintf(stderr, "========================\n\n");
+			}
 		}
 		else
 #endif
