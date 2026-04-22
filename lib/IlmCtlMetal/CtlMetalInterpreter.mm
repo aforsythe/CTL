@@ -1,0 +1,386 @@
+///////////////////////////////////////////////////////////////////////////
+// Copyright Contributors to the CTL project.
+// SPDX-License-Identifier: BSD-3-Clause
+///////////////////////////////////////////////////////////////////////////
+
+//-----------------------------------------------------------------------------
+//
+//  class MetalInterpreter -- Objective-C++ implementation.
+//
+//  The constructor acquires the system's default MTLDevice, validates that
+//  it meets the Apple7+ GPU-family requirement, and creates a command queue
+//  shared across FunctionCall dispatches.
+//
+//-----------------------------------------------------------------------------
+
+#include <CtlMetalAddr.h>
+#include <CtlMetalFunctionCall.h>
+#include <CtlMetalInterpreter.h>
+#include <CtlMetalLContext.h>
+#include <CtlMetalModule.h>
+#include <CtlMetalSidecarCache.h>
+#include <CtlMetalStdLibrary.h>
+#include <CtlSimdAddr.h>
+#include <CtlSimdInterpreter.h>
+#include <CtlSimdReg.h>
+#include <CtlSymbolTable.h>
+#include <CtlType.h>
+#include <Iex.h>
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
+#include <iterator>
+#include <memory>
+#include <sstream>
+
+#import <Metal/Metal.h>
+
+namespace Ctl {
+
+struct MetalInterpreter::Data
+{
+    id<MTLDevice>       device = nil;
+    id<MTLCommandQueue> queue = nil;
+    unsigned long       maxInstCount = 100000000;
+
+    //
+    // Host-side SIMD sidecar. Preloaded with every module the user hands
+    // to MetalInterpreter so that Metal codegen can read back evaluated
+    // module-scope const values at parse time.
+    //
+    std::unique_ptr<SimdInterpreter> sidecar;
+
+    //
+    // Persistent cache of sidecar-evaluated module-scope bytes. When
+    // `cacheValid` is true, `newLContext` short-circuits the sidecar
+    // load entirely and consumers read from the cache. When false,
+    // sidecar loads run normally and the cache is populated by the
+    // post-load harvest pass so the next ctlrender-metal invocation
+    // can skip the work.
+    //
+    MetalSidecarCache   cache;
+    bool                cacheValid = false;
+    bool                cacheDirty = false;
+};
+
+MetalInterpreter::MetalInterpreter()
+    : Interpreter(),
+      _data(new Data)
+{
+    _data->device = MTLCreateSystemDefaultDevice();
+    if (!_data->device) {
+        delete _data;
+        _data = nullptr;
+        throw IEX_NAMESPACE::BaseExc(
+            "CTL Metal backend: no Metal device available on this host.");
+    }
+    if (![_data->device supportsFamily:MTLGPUFamilyApple7]) {
+        NSString *name = [_data->device name];
+        std::string nameStr = name ? [name UTF8String] : "(unknown)";
+        delete _data;
+        _data = nullptr;
+        throw IEX_NAMESPACE::BaseExc(
+            std::string("CTL Metal backend: Apple GPU family 7 or newer "
+                        "required; this device (") + nameStr +
+            ") is not supported.");
+    }
+    _data->queue = [_data->device newCommandQueue];
+    if (!_data->queue) {
+        delete _data;
+        _data = nullptr;
+        throw IEX_NAMESPACE::BaseExc(
+            "CTL Metal backend: failed to create MTLCommandQueue.");
+    }
+
+    _data->sidecar.reset(new SimdInterpreter);
+
+    //
+    // Register the Metal backend's standard library symbols. Matches the
+    // SimdInterpreter pattern: a throwaway MetalModule + MetalLContext is
+    // sufficient because `declareMetalStdLibrary` only touches the symbol
+    // table — it never emits MSL source or invokes codegen.
+    //
+    MetalModule stdlibModule(*this, "<stdlib>", "<stdlib>");
+    std::stringstream emptySource;
+    MetalLContext stdlibLContext(emptySource, &stdlibModule, symtab());
+    declareMetalStdLibrary(stdlibLContext);
+}
+
+SimdInterpreter &
+MetalInterpreter::sidecar() const
+{
+    return *_data->sidecar;
+}
+
+bool
+MetalInterpreter::sidecarCacheValid() const
+{
+    return _data && _data->cacheValid;
+}
+
+bool
+MetalInterpreter::preloadSidecarCache(const std::string &topSourcePath)
+{
+    if (!_data) return false;
+    const bool debugPhase = std::getenv("CTL_METAL_CACHE_DEBUG") != nullptr;
+    auto t0 = std::chrono::high_resolution_clock::now();
+    const bool hit = _data->cache.tryLoad(topSourcePath);
+    _data->cacheValid = hit;
+    _data->cacheDirty = !hit;
+    if (debugPhase) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        std::cerr << "CTL Metal sidecar cache preload "
+                  << (hit ? "HIT" : "MISS")
+                  << " for " << topSourcePath
+                  << " (" << ms << " ms)" << std::endl;
+    }
+    return hit;
+}
+
+void
+MetalInterpreter::flushSidecarCache(const std::string &topSourcePath)
+{
+    if (!_data) return;
+    if (!_data->cacheDirty) return;      // cache loaded from disk; nothing new
+    const bool debugPhase = std::getenv("CTL_METAL_CACHE_DEBUG") != nullptr;
+    auto t0 = std::chrono::high_resolution_clock::now();
+    _data->cache.writeToDisk(topSourcePath);
+    _data->cacheDirty = false;
+    _data->cacheValid = true;
+    if (debugPhase) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        std::cerr << "CTL Metal sidecar cache flush for " << topSourcePath
+                  << " (" << ms << " ms)" << std::endl;
+    }
+}
+
+const char *
+MetalInterpreter::lookupSidecarBytes(const std::string &absoluteName,
+                                     size_t &byteCountOut) const
+{
+    byteCountOut = 0;
+    if (!_data) return nullptr;
+
+    //
+    // Cache first. On a valid preload this is the only path that
+    // returns — the sidecar hasn't been fed any modules so its symbol
+    // table is empty. On a cold run the harvest pass adds each symbol
+    // to the cache immediately after sidecar.loadModule succeeds, so
+    // consumers still see their bytes here.
+    //
+    const char *bytes = _data->cache.lookup(absoluteName, byteCountOut);
+    if (bytes) return bytes;
+
+    //
+    // Fallback to the live sidecar. Reached only during cold runs when
+    // the harvest pass hasn't yet populated a symbol the consumer is
+    // asking about (should not happen because harvest runs right after
+    // each sidecar.loadModule, but the fallback keeps correctness if
+    // that ordering ever slips).
+    //
+    if (!_data->sidecar) return nullptr;
+    SymbolInfoPtr sym = _data->sidecar->symbolTable().lookupSymbol(absoluteName);
+    if (!sym) return nullptr;
+    SimdDataAddrPtr addr = sym->addr().cast<SimdDataAddr>();
+    if (!addr || !addr->reg()) return nullptr;
+    DataTypePtr dt = sym->dataType();
+    if (!dt) return nullptr;
+    byteCountOut = dt->objectSize();
+    return (*addr->reg())[0];
+}
+
+MetalInterpreter::~MetalInterpreter()
+{
+    delete _data;
+}
+
+size_t
+MetalInterpreter::maxSamples() const
+{
+    // Coupled with `MetalFunctionArg::data()`'s pre-allocated capacity
+    // (kDefaultVaryingCapacity). Callers like `ctlrender` treat
+    // `maxSamples()` as the largest batch they can hand to
+    // `callFunction(N)` and assume the arg buffers handed back by
+    // `data()` have room for that many samples. Raising one value
+    // without raising the other causes silent truncation of pixels
+    // past the smaller of the two. Kept in sync deliberately — bump
+    // both together.
+    //
+    // Sized to fit a UHD 4K frame (3840x2160 = 8,294,400 px) in one
+    // dispatch so a 30-image 4K batch pays ~30 kernel launches instead
+    // of ~3,810. Per-arg default pre-allocation is N*elementSize; for a
+    // float varying arg this is 64 MB, comfortably within host RAM for
+    // the handful of FunctionCalls ctlrender-metal keeps alive.
+    return 16 * 1024 * 1024;
+}
+
+void
+MetalInterpreter::setMaxInstCount(unsigned long count)
+{
+    _data->maxInstCount = count;
+}
+
+void
+MetalInterpreter::abortAllPrograms()
+{
+    throw IEX_NAMESPACE::NoImplExc("MetalInterpreter::abortAllPrograms");
+}
+
+std::string
+MetalInterpreter::deviceName() const
+{
+    if (!_data || !_data->device)
+        return std::string();
+    NSString *name = [_data->device name];
+    return name ? std::string([name UTF8String]) : std::string();
+}
+
+FunctionCallPtr
+MetalInterpreter::newFunctionCallInternal(const SymbolInfoPtr info,
+                                          const std::string &functionName)
+{
+    FunctionTypePtr ftype = info->functionType();
+    if (!ftype)
+        throw IEX_NAMESPACE::TypeExc(
+            std::string("CTL Metal backend: '") + functionName +
+            "' is not a function.");
+
+    MetalFunctionAddrPtr addr = info->addr().cast<MetalFunctionAddr>();
+    if (!addr)
+        throw IEX_NAMESPACE::LogicExc(
+            std::string("CTL Metal backend: function '") + functionName +
+            "' has no compiled kernel address. Did code generation run?");
+
+    //
+    // SymbolInfo::module() is const so that front-end inspectors can't
+    // mutate a symbol's owning module, but calling a function needs to
+    // lazily compile / cache an MTLLibrary on that module. The const_cast
+    // is safe: MetalModule's mutability is an implementation detail of
+    // the backend's pipeline cache.
+    //
+    const Module *constMod = info->module();
+    if (!constMod)
+        throw IEX_NAMESPACE::LogicExc(
+            std::string("CTL Metal backend: function '") + functionName +
+            "' has no owning module.");
+
+    MetalModule *mod =
+        const_cast<MetalModule *>(dynamic_cast<const MetalModule *>(constMod));
+    if (!mod)
+        throw IEX_NAMESPACE::LogicExc(
+            std::string("CTL Metal backend: function '") + functionName +
+            "' is defined in a non-Metal module.");
+
+    return new MetalFunctionCall(
+        *this, functionName, ftype, *mod, addr->kernelName());
+}
+
+Module *
+MetalInterpreter::newModule(const std::string &moduleName,
+                            const std::string &fileName)
+{
+    return new MetalModule(*this, moduleName, fileName);
+}
+
+LContext *
+MetalInterpreter::newLContext(std::istream &file,
+                              Module *module,
+                              SymbolTable &symtab) const
+{
+    //
+    // Preload the same source into the host-side SIMD sidecar before we
+    // start Metal parsing. MetalVariableNode::generateCode relies on the
+    // sidecar having already run `runInitCode` for this module — that's
+    // how it substitutes evaluated values for module-scope const
+    // initializers whose RHS contains a user-function call (which MSL
+    // can't express in a `constant` global initializer).
+    //
+    // Nested `import` clauses recurse through this same override because
+    // Interpreter::_loadModule dispatches to the virtual `newLContext`
+    // for every module it loads (top-level and recursive). The sidecar's
+    // own loadModule is a no-op on modules it already has, so already-
+    // loaded dependencies are cheap.
+    //
+    if (module && _data && _data->sidecar &&
+        !_data->cacheValid &&
+        !_data->sidecar->moduleIsLoaded(module->name())) {
+        //
+        // The istream we were handed is live — consume it into a string,
+        // feed that to the sidecar, and rewind the stream so the Metal
+        // parser can read the same source next. Both ifstream (file
+        // loads) and stringstream (inline-source loads) from
+        // Interpreter::_loadModule are seekable, so this round-trip is
+        // safe. If that ever changes we'll need to intercept further
+        // upstream.
+        //
+        std::string source((std::istreambuf_iterator<char>(file)),
+                           std::istreambuf_iterator<char>());
+        const bool debugPhase = std::getenv("CTL_METAL_CACHE_DEBUG") != nullptr;
+        auto t0 = std::chrono::high_resolution_clock::now();
+        _data->sidecar->loadModule(module->name(),
+                                   module->fileName(),
+                                   source);
+        if (debugPhase) {
+            auto t1 = std::chrono::high_resolution_clock::now();
+            double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            std::cerr << "CTL Metal sidecar.loadModule(" << module->name()
+                      << ") " << ms << " ms, " << source.size() << " bytes"
+                      << std::endl;
+        }
+
+        //
+        // Track the source file so the cache we write at flush time can
+        // invalidate itself on the next run when any source changes.
+        // Inline modules (no file on disk) have an empty fileName and
+        // are silently skipped by markSource.
+        //
+        if (!module->fileName().empty())
+            _data->cache.markSource(module->fileName());
+
+        //
+        // Harvest every module-scope data symbol with a populated reg
+        // into the cache. Doing it incrementally (per module) keeps
+        // consumer lookups cheap during the same parse even though the
+        // sidecar still holds the data itself — and when the top-level
+        // load finishes `flushSidecarCache` writes the complete set to
+        // disk for the next run to consume.
+        //
+        // Filter on module *name*: the sidecar constructed its own
+        // SimdModule pointer, so `info->module()` compared to our
+        // MetalModule pointer never matches. The name is unique per
+        // Interpreter::_loadModule and stable across sidecar + Metal.
+        //
+        const SymbolTable &sideSym = _data->sidecar->symbolTable();
+        const std::string &modName = module->name();
+        size_t harvested = 0;
+        for (auto it = sideSym.begin(); it != sideSym.end(); ++it) {
+            const SymbolInfoPtr &info = it->second;
+            if (!info) continue;
+            if (!info->module() ||
+                info->module()->name() != modName) continue;
+            SimdDataAddrPtr addr = info->addr().cast<SimdDataAddr>();
+            if (!addr || !addr->reg()) continue;
+            DataTypePtr dt = info->dataType();
+            if (!dt) continue;
+            const size_t n = dt->objectSize();
+            if (n == 0) continue;
+            _data->cache.add(it->first, (*addr->reg())[0], n);
+            ++harvested;
+        }
+        if (debugPhase) {
+            std::cerr << "CTL Metal sidecar harvest mod=" << modName
+                      << " harvested=" << harvested
+                      << std::endl;
+        }
+        _data->cacheDirty = true;
+
+        file.clear();
+        file.seekg(0);
+    }
+
+    return new MetalLContext(file, module, symtab);
+}
+
+} // namespace Ctl

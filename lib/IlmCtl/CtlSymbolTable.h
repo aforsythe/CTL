@@ -262,7 +262,7 @@ class SymbolTable
     // defineSymbol
     //--------------------------------------------------------
 
-    std::string         getAbsoluteName (const std::string &name);
+    std::string         getAbsoluteName (const std::string &name) const;
 
 
     //-------------------------------------------------------
@@ -306,8 +306,13 @@ class SymbolTable
 
     //--------------------------------------------------------
     // Read-only iteration over every (absolute name, SymbolInfo)
-    // pair.  Used by the debugger inspector to walk module-scope
-    // and per-module captured locals.
+    // pair.  Used by:
+    //   - the debugger inspector to walk module-scope and per-module
+    //     captured locals
+    //   - the Metal backend to harvest sidecar-evaluated module-scope
+    //     values into an on-disk cache so subsequent ctlrender-metal
+    //     invocations can skip the sidecar parse + codegen +
+    //     runInitCode work
     //--------------------------------------------------------
 
     typedef std::map <std::string, SymbolInfoPtr> SymbolMap;
@@ -319,7 +324,7 @@ class SymbolTable
 
     typedef std::vector <std::string> StringStack;
 
-    SymbolMap		_symbols;
+    SymbolMap	_symbols;
     StringStack		_localNsStack;
     std::string		_globalNs;
     int			_i;

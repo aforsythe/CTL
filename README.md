@@ -64,6 +64,7 @@ global image statistics (like a sum of all pixels in an image).
 * `.github/` - Github CI workflow files
 * `cmake/` - cmake support files
 * `ctlrender/` - a command-line tool to apply CTL transforms to images
+* `ctlrender-metal/` - Apple Silicon Metal GPU sibling of `ctlrender` (experimental; see "Metal GPU backend" below)
 * `doc/` - CTL documentation
 * `docker/` - dockerfiles that compile CTL on various platforms 
 * `lib/` - CTL libraries and the CTL interpreter 
@@ -86,6 +87,33 @@ This will install CTL along with all required dependencies.
 CTL can also be installed from source (Linux, macOS or Windows) or be run in a Docker container.
 
 See [INSTALL.md](./INSTALL.md) for details.
+
+## Metal GPU backend (experimental, Apple Silicon)
+
+An experimental Metal-backed execution path lives in `lib/IlmCtlMetal/` and is exposed through the `ctlrender-metal` executable. It is a drop-in parallel of `ctlrender` that runs the same transforms on the GPU using unified-memory buffers, targeting 10–30× compute speedups on M-series Macs while matching the CPU SIMD backend bit-for-bit.
+
+**Requirements:** Apple Silicon Mac, macOS 14+, Xcode Metal toolchain.
+
+**Build:**
+
+```
+mkdir build && cd build
+cmake .. -DCTL_BUILD_METAL_BACKEND=ON
+make
+```
+
+**Use:**
+
+```
+ctlrender-metal -ctl transform.ctl in.exr out.exr
+```
+
+Two extra CLI modes are provided on top of the regular `ctlrender` flags:
+
+* `--parity-check` runs both the CPU and GPU backends side-by-side, writes `<stem>.cpu.<ext>` and `<stem>.gpu.<ext>`, and exits non-zero if any output channel's ULP deviation is non-zero.
+* `--benchmark [N]` runs the transform N times (default 100) and emits JSON-formatted timing on stdout — cold first-iteration cost plus warm min / mean / median / p95 / max.
+
+0-ULP parity against the CPU SIMD backend is the project's correctness bar. Unavoidable hardware-level deviations are documented in `lib/IlmCtlMetal/PRECISION.md`.
 
 ## License ##
  

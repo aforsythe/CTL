@@ -41,6 +41,17 @@ cmake --build .
 cmake --build . --target install
 ```
 
+### Optional: Metal GPU backend (Apple Silicon)
+An experimental Metal-backed execution path lives in `lib/IlmCtlMetal/` and is exposed through the `ctlrender-metal` executable — a drop-in sibling of `ctlrender` that runs the same transforms on the GPU. It requires Apple Silicon (M-series), macOS 14+, and the Xcode Metal toolchain; the CMake option is force-disabled on non-APPLE platforms.
+
+```
+mkdir build && cd build
+cmake .. -DCTL_BUILD_METAL_BACKEND=ON
+make
+```
+
+The GPU backend aims for bit-exact (0-ULP) parity with the CPU SIMD backend; any unavoidable hardware-level deviations are documented in `lib/IlmCtlMetal/PRECISION.md`. See the "Metal GPU backend" section of the main README for usage details (`--parity-check`, `--benchmark`).
+
 ## 3. Running in Docker
 Docker is ideal if you want to use CTL without installing libraries directly onto your host operating system.
 

@@ -1,0 +1,64 @@
+name: macOS-Metal
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  push:
+    paths-ignore:
+      - 'README.md'
+      - 'doc/**'
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'doc/**'
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+
+  build-and-test-metal-backend:
+
+    # macos-latest is Apple Silicon (M-series). The Metal backend is gated
+    # at configure time by APPLE, and at runtime by MTLGPUFamily.apple7 —
+    # tests that need an actual GPU dispatch call Ctl::metalBackendAvailable()
+    # and skip gracefully when no device is present (which is the case on
+    # GitHub's headless macOS runners). The value of this job is to catch
+    # compile/link regressions in lib/IlmCtlMetal/, ctlrender-metal/, and
+    # unittest/IlmCtlMetal/ on every push — the device-dependent precision
+    # + performance suites run on self-hosted hardware (not wired yet).
+    runs-on: macos-latest
+
+    steps:
+
+    - name: update homebrew
+      run: brew update
+
+    - name: clean homebrew cache
+      run: brew cleanup --prune=all
+
+    - name: install libtiff
+      run: brew install libtiff
+
+    - name: install openexr
+      run: brew install openexr
+
+    - name: install aces_container
+      run: brew install aces_container
+
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake (with Metal backend)
+      run: |
+        cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCTL_BUILD_METAL_BACKEND=ON
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Test (full suite, includes IlmCtlMetal; skips device-requiring tests when no GPU is available)
+      working-directory: ${{github.workspace}}/build
+      run: ctest -V --output-on-failure

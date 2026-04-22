@@ -88,8 +88,15 @@ class SimdInterpreter: public Interpreter
     unsigned long		maxInstCount();
 
     //-------------------------------------------------------------------
-    // Public access to the symbol table.  Exposed so the debugger
-    // inspector can walk module-scope and per-module local symbols.
+    // Public access to the interpreter's symbol table.  Exposed so that:
+    //   - the debugger inspector can walk module-scope and per-module
+    //     local symbols
+    //   - the Metal backend's host-side SIMD sidecar can look up
+    //     evaluated module-scope const values by absolute name and
+    //     substitute them for MSL-illegal initializers (e.g. RHS
+    //     expressions that call a user-defined CTL function — MSL's
+    //     `constant` storage qualifier only accepts constexpr
+    //     initializers)
     //-------------------------------------------------------------------
 
     SymbolTable &		symbolTable() const;
