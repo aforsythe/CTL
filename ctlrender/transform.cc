@@ -57,13 +57,16 @@
 #include "tiff_file.hh"
 #include "exr_file.hh"
 #include "aces_file.hh"
-#include <dpx.hh>
-#include <CtlRcPtr.h>
 #include <CtlFunctionCall.h>
+#ifdef CTL_GPU_BACKEND
+#include <CtlMetalInterpreter.h>
+#else
 #include <CtlSimdInterpreter.h>
+#endif
 #include <CtlStdType.h>
 #include <atomic>
 #include <exception>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -78,20 +81,8 @@
 
 extern int num_threads;
 
-class CTLResult;
-typedef Ctl::RcPtr<CTLResult> CTLResultPtr;
-
-// class which holds the data resulting from a CTL transform
-class CTLResult: public Ctl::RcObject
-{
-public:
-	CTLResult();
-	virtual ~CTLResult();
-
-	Ctl::TypeStoragePtr data;
-	bool external;
-	std::string alt_name;
-};
+// Note: CTLResult definition now lives in transform.hh so that
+// ctlrender-metal's parity.cc can construct CTLResults lists directly.
 
 CTLResult::CTLResult() :
 		Ctl::RcObject()
@@ -102,8 +93,6 @@ CTLResult::CTLResult() :
 CTLResult::~CTLResult()
 {
 }
-
-typedef std::list<CTLResultPtr> CTLResults;
 
 
 // This function is used to add to the result list parameters that
@@ -330,6 +319,7 @@ void set_ctl_results_from_ctl_function_argument(CTLResults *ctl_results, const C
 	ctl_result->data->copy(arg, 0, offset, count);
 }
 
+#ifndef CTL_GPU_BACKEND
 // Out-of-line so the std::map<..., std::unique_ptr<SimdInterpreter>> member's
 // destructor is instantiated in this TU where SimdInterpreter is complete.
 InterpreterCache::InterpreterCache() = default;
@@ -344,12 +334,48 @@ void InterpreterCache::preWarm(const char *filename)
         slot->loadFile(filename);
     }
 }
+#endif
 
+#ifdef CTL_GPU_BACKEND
+// Out-of-line so the std::map<..., std::unique_ptr<MetalInterpreter>> member's
+// destructor is instantiated in this TU where MetalInterpreter is complete.
+MetalInterpreterCache::MetalInterpreterCache() = default;
+MetalInterpreterCache::~MetalInterpreterCache() = default;
+
+Ctl::MetalInterpreter &
+MetalInterpreterCache::get(const char *filename)
+{
+    auto &slot = byFilename[std::string(filename)];
+    if (!slot)
+    {
+        // Derive the module name (basename without extension) so
+        // loadFile registers the file under a stable name and
+        // moduleIsLoaded() is cheap on repeat calls.
+        std::string mod(filename);
+        size_t s = mod.find_last_of("/\\");
+        if (s != std::string::npos) mod = mod.substr(s + 1);
+        size_t d = mod.find_last_of('.');
+        if (d != std::string::npos) mod.resize(d);
+
+        slot.reset(new Ctl::MetalInterpreter);
+        if (!slot->moduleIsLoaded(mod))
+            slot->loadFile(filename, mod);
+    }
+    return *slot;
+}
+#endif
+
+#ifdef CTL_GPU_BACKEND
+void run_ctl_transform(Ctl::Interpreter &shared_interpreter,
+                       const ctl_operation_t &ctl_operation,
+                       CTLResults *ctl_results, size_t count)
+#else
 void run_ctl_transform(const ctl_operation_t &ctl_operation,
                        CTLResults *ctl_results, size_t count,
                        InterpreterCache *cache)
+#endif
 {
-	Ctl::SimdInterpreter *interpreter = nullptr;
+	Ctl::Interpreter *interpreter = nullptr;
 	Ctl::FunctionCallPtr fn;
 	Ctl::FunctionArgPtr arg;
 	CTLResults::iterator results_iter;
@@ -387,8 +413,21 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation,
 		{
 			*dot = 0;
 		}
-        
-        
+
+#ifdef CTL_GPU_BACKEND
+        //
+        // Use the CTL file's basename as the module name so repeated
+        // calls against a shared interpreter (hoisted out of the
+        // per-file loop in main()) can skip re-parsing and re-compiling
+        // the same source. Without an explicit module name, loadFile
+        // generates a random one every call and would re-register all
+        // top-level symbols, which either collides ("already defined
+        // in current scope") or silently recompiles the MSL every file.
+        //
+        if (!shared_interpreter.moduleIsLoaded(module))
+            shared_interpreter.loadFile(ctl_operation.filename, module);
+        interpreter = &shared_interpreter;
+#else
         // Reuse any cached, already-loaded interpreter for this script.
         // Each distinct ctl_operation.filename gets its own interpreter so
         // that unqualified newFunctionCall("main") lookups do not collide
@@ -406,6 +445,7 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation,
             }
             interpreter = it->second.get();
         }
+#endif
 
         try
         {
@@ -835,7 +875,11 @@ void transform(const char *inputFile, const char *outputFile,
                Compression *compression,
 		       const CTLOperations &ctl_operations,
 		       const CTLParameters &global_parameters,
+#ifdef CTL_GPU_BACKEND
+		       MetalInterpreterCache *cache)
+#else
 		       InterpreterCache *cache)
+#endif
 {
 	CTLOperations::const_iterator operations_iter;
 	ctl_operation_t ctl_operation;
@@ -957,6 +1001,23 @@ void transform(const char *inputFile, const char *outputFile,
 		ctl_results.push_back(mkresult(name, NULL, image_buffer, j));
 	}
 
+#ifdef CTL_GPU_BACKEND
+	//
+	// Per-file MetalInterpreter cache: each distinct CTL script gets
+	// its own interpreter so their `main`s don't collide at loadFile.
+	// MSL source compile (~800 ms cold on ACES v2) is still amortized
+	// across input images within the same .ctl file.  Fall back to a
+	// call-local cache when no shared one was supplied so direct
+	// callers (outside the batch driver) keep working.
+	//
+	std::unique_ptr<MetalInterpreterCache> owned_cache;
+	if (cache == NULL)
+	{
+		owned_cache.reset(new MetalInterpreterCache());
+		cache = owned_cache.get();
+	}
+#endif
+
 	for (operations_iter = ctl_operations.begin(); operations_iter != ctl_operations.end(); operations_iter++)
 	{
 		ctl_operation = *operations_iter;
@@ -970,7 +1031,16 @@ void transform(const char *inputFile, const char *outputFile,
 		}
 
 		// Output is used to pass output parameters from script to the next.
+#ifdef CTL_GPU_BACKEND
+		{
+			// Per-file MetalInterpreter so that two `-ctl` files both
+			// defining `main` don't collide in one interpreter's scope.
+			Ctl::MetalInterpreter &interp = cache->get(ctl_operation.filename);
+			run_ctl_transform(interp, *operations_iter, &ctl_results, image_buffer.pixels());
+		}
+#else
 		run_ctl_transform(*operations_iter, &ctl_results, image_buffer.pixels(), cache);
+#endif
 	}
 
 	mkimage(&image_buffer, ctl_results, image_format);
@@ -1013,3 +1083,207 @@ void transform(const char *inputFile, const char *outputFile,
 		exit(1);
 	}
 }
+
+//-----------------------------------------------------------------------------
+//
+//  transform_pixels -- apply the CTL chain to a caller-owned, pre-
+//  populated 1xN framebuffer and mutate it in place.  No file I/O.
+//  Used by ctlrender's -pixel CLI mode.
+//
+//  Intentionally mirrors transform()'s compute loop but skips
+//  decode (the caller has already filled image_buffer) and encode
+//  (the caller reads the buffer back out for stdout printing).
+//
+//-----------------------------------------------------------------------------
+
+void
+transform_pixels(const CTLOperations &ctl_operations,
+                 const CTLParameters &global_parameters,
+                 ctl::dpx::fb<float> *image_buffer,
+#ifdef CTL_GPU_BACKEND
+                 MetalInterpreterCache *cache
+#else
+                 InterpreterCache *cache
+#endif
+                 )
+{
+    CTLResults ctl_results;
+
+    if (image_buffer->depth() > 0)
+        ctl_results.push_back(mkresult("rIn", "c00In", *image_buffer, 0));
+    if (image_buffer->depth() > 1)
+        ctl_results.push_back(mkresult("gIn", "c01In", *image_buffer, 1));
+    if (image_buffer->depth() > 2)
+        ctl_results.push_back(mkresult("bIn", "c02In", *image_buffer, 2));
+    if (image_buffer->depth() > 3)
+        ctl_results.push_back(mkresult("aIn", "c03In", *image_buffer, 3));
+
+    char name[16];
+    for (uint32_t j = 4; j < image_buffer->depth(); j++)
+    {
+        memset(name, 0, sizeof(name));
+        snprintf(name, sizeof(name) - 1, "c%02dIn", j);
+        ctl_results.push_back(mkresult(name, NULL, *image_buffer, j));
+    }
+
+#ifdef CTL_GPU_BACKEND
+    std::unique_ptr<MetalInterpreterCache> owned_cache;
+    if (cache == NULL)
+    {
+        owned_cache.reset(new MetalInterpreterCache());
+        cache = owned_cache.get();
+    }
+#else
+    std::unique_ptr<InterpreterCache> owned_cache;
+    if (cache == NULL)
+    {
+        owned_cache.reset(new InterpreterCache());
+        cache = owned_cache.get();
+    }
+#endif
+
+    for (CTLOperations::const_iterator op = ctl_operations.begin();
+         op != ctl_operations.end(); ++op)
+    {
+        for (CTLParameters::const_iterator p = global_parameters.begin();
+             p != global_parameters.end(); ++p)
+            add_parameter_value_to_ctl_results(&ctl_results, *p);
+        for (CTLParameters::const_iterator p = op->local.begin();
+             p != op->local.end(); ++p)
+            add_parameter_value_to_ctl_results(&ctl_results, *p);
+
+#ifdef CTL_GPU_BACKEND
+        Ctl::MetalInterpreter &interp = cache->get(op->filename);
+        run_ctl_transform(interp, *op, &ctl_results, image_buffer->pixels());
+#else
+        run_ctl_transform(*op, &ctl_results, image_buffer->pixels(), cache);
+#endif
+    }
+
+    // mkimage only reads image_format->descriptor when descriptor is 0.
+    // For -pixel mode we don't care about the descriptor — a zero-
+    // initialized format_t is safe.
+    format_t dummy_format;
+    memset(&dummy_format, 0, sizeof(dummy_format));
+    mkimage(image_buffer, ctl_results, &dummy_format);
+}
+
+
+#ifdef CTL_GPU_BACKEND
+//-----------------------------------------------------------------------------
+//
+//  Metal pipeline-split entry points.  Mirror transform()'s decode /
+//  compute / encode phases verbatim so the pipelined batch driver in
+//  main.cc produces bit-identical output to the serial path.  Format
+//  fields mutated during decode (e.g. `src_bps`) travel with the buffer
+//  via the shared format_t the caller owns, so all three stages must
+//  see the same `format` pointer for a given file.
+//
+//-----------------------------------------------------------------------------
+
+void
+transform_metal_decode(const char *inputFile,
+                       float input_scale,
+                       format_t *image_format,
+                       ctl::dpx::fb<float> *image_buffer)
+{
+	if (!dpx_read(inputFile, input_scale, image_buffer, image_format) &&
+		!exr_read(inputFile, input_scale, image_buffer, image_format) &&
+		!tiff_read(inputFile, input_scale, image_buffer, image_format))
+	{
+		fprintf(stderr, "unable to read file %s (unknown format).\n", inputFile);
+		exit(1);
+	}
+
+	if (image_format->bps == 0)
+	{
+		image_format->bps = image_format->src_bps;
+	}
+}
+
+void
+transform_metal_compute(MetalInterpreterCache &cache,
+                        const CTLOperations &ctl_operations,
+                        const CTLParameters &global_parameters,
+                        format_t *image_format,
+                        ctl::dpx::fb<float> *image_buffer)
+{
+	CTLResults ctl_results;
+
+	if (image_buffer->depth() > 0)
+		ctl_results.push_back(mkresult("rIn", "c00In", *image_buffer, 0));
+	if (image_buffer->depth() > 1)
+		ctl_results.push_back(mkresult("gIn", "c01In", *image_buffer, 1));
+	if (image_buffer->depth() > 2)
+		ctl_results.push_back(mkresult("bIn", "c02In", *image_buffer, 2));
+	if (image_buffer->depth() > 3)
+		ctl_results.push_back(mkresult("aIn", "c03In", *image_buffer, 3));
+
+	char name[16];
+	for (uint32_t j = 4; j < image_buffer->depth(); j++)
+	{
+		memset(name, 0, sizeof(name));
+		snprintf(name, sizeof(name) - 1, "c%02dIn", j);
+		ctl_results.push_back(mkresult(name, NULL, *image_buffer, j));
+	}
+
+	for (CTLOperations::const_iterator op = ctl_operations.begin();
+	     op != ctl_operations.end(); ++op)
+	{
+		for (CTLParameters::const_iterator p = global_parameters.begin();
+		     p != global_parameters.end(); ++p)
+			add_parameter_value_to_ctl_results(&ctl_results, *p);
+		for (CTLParameters::const_iterator p = op->local.begin();
+		     p != op->local.end(); ++p)
+			add_parameter_value_to_ctl_results(&ctl_results, *p);
+
+		// Each distinct CTL file gets its own MetalInterpreter so
+		// that `main` in file A doesn't collide with `main` in file B.
+		Ctl::MetalInterpreter &interp = cache.get(op->filename);
+		run_ctl_transform(interp, *op, &ctl_results, image_buffer->pixels());
+	}
+
+	mkimage(image_buffer, ctl_results, image_format);
+}
+
+void
+transform_metal_encode(const char *outputFile,
+                       float output_scale,
+                       format_t *image_format,
+                       Compression *compression,
+                       ctl::dpx::fb<float> *image_buffer)
+{
+	if (output_scale != 0.0)
+		output_scale = output_scale / 1.0;
+	if (image_format->squish)
+		image_buffer->swizzle(0, TRUE);
+
+	if (!strncmp(image_format->ext, "aces", 3))
+	{
+		aces_write(outputFile, output_scale,
+		           image_buffer->width(), image_buffer->height(), image_buffer->depth(),
+		           image_buffer->ptr(), image_format);
+	}
+	else if (!strncmp(image_format->ext, "exr", 3))
+	{
+		exr_write(outputFile, output_scale, *image_buffer, image_format, compression);
+	}
+	else if (!strncmp(image_format->ext, "adx", 3))
+	{
+		dpx_write(outputFile, output_scale, *image_buffer, image_format);
+	}
+	else if (!strncmp(image_format->ext, "dpx", 3))
+	{
+		dpx_write(outputFile, output_scale, *image_buffer, image_format);
+	}
+	else if (!strncmp(image_format->ext, "tiff", 3))
+	{
+		tiff_write(outputFile, output_scale, *image_buffer, image_format);
+	}
+	else
+	{
+		fprintf(stderr, "unable to write a %s file (unknown format).\n", image_format->ext);
+		exit(1);
+	}
+}
+#endif // CTL_GPU_BACKEND

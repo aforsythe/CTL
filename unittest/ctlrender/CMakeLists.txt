@@ -146,6 +146,59 @@ endif()
 add_test(NAME "ctlrender-maxInstCount-exception" COMMAND ctlrender -force -ctl "${PROJECT_SOURCE_DIR}/resources/test/ctl/throw_maxInstCount_exception.ctl" "${PROJECT_SOURCE_DIR}/resources/test/exr/colorbars_nuke_rgb_exr16.exr" "${CTLRENDER_OUTPUT_FOLDER}/maxInstCount_exception.exr")
 set_tests_properties("ctlrender-maxInstCount-exception" PROPERTIES WILL_FAIL TRUE)
 
+# -pixel mode: one pixel on CLI, result to stdout, no file I/O.
+#
+# Input RGBA = (0.5, 0.5, 0.5, 1.0); pixel_chain_a.ctl adds 0.25 to R;
+# pixel_chain_b.ctl multiplies G by 2 and halves A.  Expected:
+#   single a:    R=0.75 G=0.5  B=0.5 A=1.0
+#   chain a→b:   R=0.75 G=1.0  B=0.5 A=0.5
+# Tests assert via PASS_REGULAR_EXPRESSION on stdout.
+add_test(NAME "ctlrender-pixel-rgba-single"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_chain_a.ctl"
+        -pixel 0.5,0.5,0.5,1.0)
+set_tests_properties("ctlrender-pixel-rgba-single" PROPERTIES
+    PASS_REGULAR_EXPRESSION "R=0\\.7500000[ \\t]+G=0\\.5000000[ \\t]+B=0\\.5000000[ \\t]+A=1\\.0000000")
+
+add_test(NAME "ctlrender-pixel-rgba-chain"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_chain_a.ctl"
+        -ctl "${TEST_FILES}/pixel_chain_b.ctl"
+        -pixel 0.5,0.5,0.5,1.0)
+set_tests_properties("ctlrender-pixel-rgba-chain" PROPERTIES
+    PASS_REGULAR_EXPRESSION "R=0\\.7500000[ \\t]+G=1\\.0000000[ \\t]+B=0\\.5000000[ \\t]+A=0\\.5000000")
+
+# RGB (3 values) depth-3 input; expected stdout has no 'A=' component.
+add_test(NAME "ctlrender-pixel-rgb-only"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_rgb_only.ctl"
+        -pixel 0.1,0.2,0.3)
+set_tests_properties("ctlrender-pixel-rgb-only" PROPERTIES
+    PASS_REGULAR_EXPRESSION "^R=0\\.2000000[ \\t]+G=0\\.4000000[ \\t]+B=0\\.6000000[ \\t]*\n?$")
+
+# Error: -pixel without -ctl must fail.
+add_test(NAME "ctlrender-pixel-no-ctl-errors"
+    COMMAND ctlrender -pixel 0.1,0.2,0.3,1.0)
+set_tests_properties("ctlrender-pixel-no-ctl-errors" PROPERTIES WILL_FAIL TRUE)
+
+# Error: -pixel mixed with a positional input file must fail.
+add_test(NAME "ctlrender-pixel-positional-conflict-errors"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_chain_a.ctl"
+        -pixel 0.1,0.2,0.3,1.0
+        "${TEST_FILES}/colorbars_nuke_rgba_exr32.exr")
+set_tests_properties("ctlrender-pixel-positional-conflict-errors" PROPERTIES WILL_FAIL TRUE)
+
+# Error: non-numeric value in -pixel must fail.
+add_test(NAME "ctlrender-pixel-malformed-errors"
+    COMMAND ctlrender -ctl "${TEST_FILES}/pixel_chain_a.ctl" -pixel 0.1,abc,0.3)
+set_tests_properties("ctlrender-pixel-malformed-errors" PROPERTIES WILL_FAIL TRUE)
+
+# Error: too few values (needs 3 or 4).
+add_test(NAME "ctlrender-pixel-too-few-errors"
+    COMMAND ctlrender -ctl "${TEST_FILES}/pixel_chain_a.ctl" -pixel 0.1,0.2)
+set_tests_properties("ctlrender-pixel-too-few-errors" PROPERTIES WILL_FAIL TRUE)
+
 # Phase B: tile-parallel dispatch must produce byte-identical output for
 # any -threads N on a fixture that spans multiple tiles (maxSamples=4096,
 # so >4096 pixels). Runs the same transform at several thread counts and
