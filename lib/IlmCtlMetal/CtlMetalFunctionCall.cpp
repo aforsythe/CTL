@@ -156,11 +156,19 @@ MetalFunctionCall::MetalFunctionCall(MetalInterpreter &interpreter,
         // reg is already populated. Copy the bytes once here; callers
         // pick them up via `FunctionArg::setDefaultValue()`.
         //
+        // Pass the owning module so the warm-cache repair path in
+        // `lookupSidecarBytes` can demand-load the module (and its
+        // imports transitively) when the on-disk cache preload was
+        // a HIT but the default-value bytes didn't survive an older
+        // incomplete harvest. Without this hook a stale cache would
+        // leave `populateDefault` unset and the kernel would see
+        // garbage for any `input varying float x = 1.;`-style param.
+        //
         if (p.isReadable()) {
             const std::string staticName = name + "$" + p.name;
             size_t nbytes = 0;
             const char *bytes =
-                _interpreter.lookupSidecarBytes(staticName, nbytes);
+                _interpreter.lookupSidecarBytes(staticName, nbytes, &module);
             if (bytes && nbytes > 0)
                 arg->populateDefault(bytes);
         }

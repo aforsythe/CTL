@@ -225,7 +225,18 @@ MetalInterpreter::lookupSidecarBytes(const std::string &absoluteName,
         auto t0 = std::chrono::high_resolution_clock::now();
         bool loaded = false;
         try {
-            _data->sidecar->loadModule(owningModule->name());
+            //
+            // Pass owningModule->fileName() so top-level CTL files
+            // that aren't on CTL_MODULE_PATH (the usual case for
+            // transform files handed to ctlrender via `-ctl`) still
+            // resolve. For imported modules fileName() is likewise
+            // populated by the parser. The sidecar's parser then
+            // resolves nested `import` clauses via CTL_MODULE_PATH
+            // the normal way.
+            //
+            _data->sidecar->loadModule(owningModule->name(),
+                                       owningModule->fileName(),
+                                       std::string());
             loaded = true;
         } catch (...) {
             // Fall through to the live-sidecar fallback below.
@@ -406,24 +417,27 @@ MetalInterpreter::newLContext(std::istream &file,
     // loaded dependencies are cheap.
     //
     //
-    // Load the module into the host-side sidecar even on a warm
-    // run where the on-disk cache preload hit. An earlier
-    // `!cacheValid` gate here skipped the sidecar load whenever
-    // the cache was present, which left the live sidecar's symbol
-    // table empty — fine for `lookupSidecarBytes` (served from the
-    // cache bytes) but broken for everything else that expects the
-    // sidecar to actually hold the parsed module: default-argument
-    // propagation in `MetalFunctionCall` looks up synthetic
-    // `func$param` statics whose values live only in the sidecar's
-    // live reg for the owning module, and can't be recovered from
-    // cache bytes alone. Paying the ~200 ms/module sidecar load on
-    // every run is well below Metal's own cold compile cost and
-    // below any real-workload frame-batch amortization, so the
-    // cache now exists purely as a lookup-time convenience (early
-    // in-memory bytes + persistence across runs) rather than as
-    // a sidecar-load skip.
+    // Skip the sidecar load on a warm-cache HIT. The on-disk cache
+    // preload has already populated every module-scope-const value
+    // we'd otherwise evaluate via `sidecar.runInitCode`, saving
+    // ~200-300 ms of parse + init-code on each invocation. On a
+    // MISS (cold run, or invalidated cache) we load as before and
+    // harvest every symbol the sidecar picks up.
+    //
+    // The tradeoff: the *live* sidecar symbol table stays empty on
+    // HIT, so any path that wants a sidecar-evaluated bytes blob
+    // must either find it in the cache directly or fall through the
+    // lookupSidecarBytes warm-repair path — which requires the
+    // owning module so it can demand-load just what's missing. The
+    // two sites that matter (MetalVariableNode for module-scope
+    // consts, MetalFunctionCall for `func$param` default statics)
+    // both pass owningModule. A future caller that reads the
+    // sidecar implicitly (e.g. `sidecar().symbolTable().lookup`)
+    // would silently get empty results on warm runs; route such
+    // reads through `lookupSidecarBytes` instead.
     //
     if (module && _data && _data->sidecar &&
+        !_data->cacheValid &&
         !_data->sidecar->moduleIsLoaded(module->name())) {
         //
         // The istream we were handed is live — consume it into a string,
