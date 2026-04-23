@@ -2088,12 +2088,11 @@ MetalCallNode::generateCode(LContext &lcontext)
             call += "__ctl_err_flag";
         }
         //
-        // `scatteredDataToGrid3D` is a no-op stub on the GPU that signals
-        // "kernel-reachable call is unsupported" by setting bit 1 of the
-        // error flag. Append the flag the same way `assert` does so the
-        // stub's trailing `device atomic_uint*` parameter is satisfied.
-        // The host-side read in `MetalFunctionCall::callFunction`
-        // translates bit 1 into a specific `Iex::NoImplExc` message.
+        // `scatteredDataToGrid3D` takes a trailing `device atomic_uint*
+        // __ctl_err_flag` for the "varying inputs" / "too many samples"
+        // reject paths. The host-side read in
+        // `MetalFunctionCall::callFunction` translates the bits into
+        // specific `Iex::NoImplExc` messages.
         //
         if (stdlibAddr->mslName() == "ctl_stdlib_scatteredDataToGrid3D") {
             if (!firstStd) call += ", ";
@@ -2122,6 +2121,48 @@ MetalCallNode::generateCode(LContext &lcontext)
                 "__ctl_half_log10_tbl, __ctl_half_log_tbl, __ctl_half_exp_tbl";
         }
         call += ")";
+
+        //
+        // If any argument required a writeback (fixed-size local →
+        // VSArray output param), the call has to emit as a statement
+        // so the reverse-copy loops can run AFTER it. CTL stdlib
+        // functions are void-returning when they have out-params — the
+        // normal value-returning stdlib path (pushExpr) would defer
+        // emission until the enclosing ExprStatementNode consumes the
+        // expression, which runs too late for us to append the
+        // writebacks in the right place. Emit `call;` directly here
+        // and push `((void)0)` so the enclosing context has a legal
+        // (discarded) expression to terminate with.
+        //
+        // Only `scatteredDataToGrid3D` currently hits this path, but
+        // the check is written on the generic "did we record any
+        // writebacks?" condition so future stdlib additions with
+        // output VSArray params work without special-casing.
+        //
+        if (!writebacks.empty()) {
+            cg.writeln(call + ";");
+            for (const VSArrayWriteback &wb : writebacks) {
+                std::string idx;
+                for (size_t k = 0; k < wb.dims.size(); ++k) {
+                    std::string iv = wb.tmp + "_o" + std::to_string(k);
+                    cg.writeln("for (uint " + iv + " = 0; " + iv +
+                               " < " + std::to_string(wb.dims[k]) +
+                               "u; ++" + iv + ")");
+                    cg.writeln("{");
+                    cg.indent();
+                    idx += "[" + iv + "]";
+                }
+                cg.writeln("(" + wb.lvalue + ")" + idx + " = " +
+                           wb.tmp + idx + ";");
+                for (size_t k = 0; k < wb.dims.size(); ++k) {
+                    cg.outdent();
+                    cg.writeln("}");
+                }
+            }
+            cg.pushExpr("((void)0)");
+            return;
+        }
+
         cg.pushExpr(call);
         return;
     }

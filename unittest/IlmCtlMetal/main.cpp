@@ -19,6 +19,7 @@
 #include "testMetalNestedVSArrays.h"
 #include "testMetalParity.h"
 #include "testMetalReturnValue.h"
+#include "testMetalScatterKernel.h"
 #include "testMetalShaderCache.h"
 #include "testMetalSidecarCache.h"
 #include "testMetalStub.h"
@@ -49,6 +50,7 @@ main(int argc, char *argv[])
     TEST(testMetalNestedVSArrays);
     TEST(testMetalParity);
     TEST(testMetalReturnValue);
+    TEST(testMetalScatterKernel);
     TEST(testMetalShaderCache);
     TEST(testMetalSidecarCache);
     TEST(testMetalStub);

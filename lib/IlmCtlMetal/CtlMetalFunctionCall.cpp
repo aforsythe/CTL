@@ -332,17 +332,26 @@ MetalFunctionCall::callFunction(size_t numSamples)
 
     //
     // Bit 0 → `assert(cond)` observed `!cond` on some lane (CPU-parity
-    // LogicExc). Bit 1 → a kernel-reachable call reached the
-    // `scatteredDataToGrid3D` stub, which the Metal backend does not
-    // implement at per-lane granularity; emit a specific NoImplExc so
-    // the caller can tell this apart from an assertion failure.
+    //         LogicExc).
+    // Bit 1 → a kernel-reachable call to `scatteredDataToGrid3D`
+    //         received a *varying* input triple (`data`, `pMin`, or
+    //         `pMax` differ across lanes). The Metal port assumes
+    //         uniform inputs and does not run a per-lane RBF solve.
+    // Bit 2 → `scatteredDataToGrid3D` received `dataSize` greater
+    //         than the compile-time `kMaxRbfSamples` cap (256).
+    //         Scratch buffers for the CG solve are sized against
+    //         this cap; larger inputs can't land correct results.
     //
+    if (errFlag & 4u)
+        throw IEX_NAMESPACE::NoImplExc(
+            "CTL Metal backend: scatteredDataToGrid3D dataSize exceeds "
+            "the compile-time kMaxRbfSamples=256 cap. Rebuild with a "
+            "larger cap or reduce the input sample count.");
     if (errFlag & 2u)
         throw IEX_NAMESPACE::NoImplExc(
-            "CTL Metal backend: scatteredDataToGrid3D is only supported "
-            "from module-initialization code (evaluated on the CPU "
-            "sidecar); calling it from a kernel-reachable path is not "
-            "implemented.");
+            "CTL Metal backend: scatteredDataToGrid3D called with "
+            "varying inputs (data/pMin/pMax differ across lanes). "
+            "Only uniform inputs are supported on the Metal backend.");
     if (errFlag & 1u)
         throw IEX_NAMESPACE::LogicExc("CTL assertion failed.");
 }

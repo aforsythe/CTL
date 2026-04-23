@@ -19,6 +19,7 @@ set(SOURCES
 	testMetalNestedVSArrays.cpp
 	testMetalParity.cpp
 	testMetalReturnValue.cpp
+	testMetalScatterKernel.cpp
 	testMetalShaderCache.cpp
 	testMetalSidecarCache.cpp
 	testMetalStub.cpp
@@ -132,6 +133,16 @@ DESTINATION
 # v2 OutputTransform relies on.
 file(COPY
 	${CMAKE_CURRENT_SOURCE_DIR}/halfExpLog.ctl
+DESTINATION
+	${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Kernel-reachable scatteredDataToGrid3D parity fixture. Small (n=5)
+# identity-data RBF, evaluated inside a per-pixel varying function so
+# the MSL port of the RBF solve + grid eval runs on each lane rather
+# than being collapsed into a module-init value on the sidecar.
+file(COPY
+	${CMAKE_CURRENT_SOURCE_DIR}/scatterKernel.ctl
 DESTINATION
 	${CMAKE_CURRENT_BINARY_DIR}
 )
