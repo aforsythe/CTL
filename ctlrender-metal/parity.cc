@@ -11,6 +11,7 @@
 #include <CtlSimdInterpreter.h>
 #include <CtlMetalInterpreter.h>
 #include <Iex.h>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -207,6 +208,18 @@ int run_parity_check(const char *inputFile, const char *outputFile,
     //
     std::vector<uint32_t> max_ulp(channels, 0);
     std::vector<size_t> diverged(channels, 0);
+    std::vector<size_t> worst_pixel_per_ch(channels, 0);
+    std::vector<float> max_abs(channels, 0.0f);
+
+    //
+    // Collect per-channel diverged-sample ULPs and absolute diffs for
+    // percentile stats. The absolute-diff track exists because the ULP
+    // metric explodes to ~10^6 near zero (ULP(1e-4) ~ 1e-10) even when
+    // the actual image-space error is sub-quantum at 16-bit. Vectors are
+    // sized lazily on first divergence to keep PASS allocation-free.
+    //
+    std::vector<std::vector<uint32_t>> ch_ulps(channels);
+    std::vector<std::vector<float>>    ch_abs(channels);
 
     size_t first_diff_pixel = 0;
     uint32_t first_diff_channel = 0;
@@ -214,6 +227,16 @@ int run_parity_check(const char *inputFile, const char *outputFile,
     float first_diff_cpu = 0.0f;
     float first_diff_gpu = 0.0f;
     bool saw_any_diff = false;
+
+    //
+    // Overall-worst pixel (largest ULP drift across any channel). We
+    // dump its input RGBA and CPU/GPU outputs at the end so a single
+    // divergent sample can be isolated and fed back through the CTL
+    // chain step-by-step to pinpoint the branch that split.
+    //
+    size_t worst_pixel = 0;
+    uint32_t worst_channel = 0;
+    uint32_t worst_ulp = 0;
 
     for (size_t p = 0; p < pixels; ++p)
     {
@@ -225,8 +248,22 @@ int run_parity_check(const char *inputFile, const char *outputFile,
             if (d > 0)
             {
                 diverged[c]++;
+                ch_ulps[c].push_back(d);
+                const float abs_d = std::fabs(a - b);
+                ch_abs[c].push_back(abs_d);
+                if (abs_d > max_abs[c])
+                    max_abs[c] = abs_d;
                 if (d > max_ulp[c])
+                {
                     max_ulp[c] = d;
+                    worst_pixel_per_ch[c] = p;
+                }
+                if (d > worst_ulp)
+                {
+                    worst_ulp = d;
+                    worst_pixel = p;
+                    worst_channel = c;
+                }
                 if (!saw_any_diff)
                 {
                     saw_any_diff = true;
@@ -249,8 +286,36 @@ int run_parity_check(const char *inputFile, const char *outputFile,
     for (uint32_t c = 0; c < channels; ++c)
     {
         const char *label = (c < 4) ? channel_labels[c] : "ch?";
-        fprintf(stdout, "  %s: max ULP=%u, diverged=%zu / %zu\n",
-                label, max_ulp[c], diverged[c], pixels);
+        //
+        // Percentiles over diverged samples only — p50/p95/p99 of the
+        // non-zero-ULP population. Reporting "max" alone overweights a
+        // single branch-decision outlier and hides the typical drift.
+        //
+        uint32_t p50 = 0, p95 = 0, p99 = 0;
+        if (!ch_ulps[c].empty())
+        {
+            std::vector<uint32_t> &v = ch_ulps[c];
+            std::sort(v.begin(), v.end());
+            size_t n = v.size();
+            p50 = v[n / 2];
+            p95 = v[(n * 95) / 100];
+            p99 = v[(n * 99) / 100];
+        }
+        float abs_p95 = 0.0f, abs_p99 = 0.0f;
+        if (!ch_abs[c].empty())
+        {
+            std::vector<float> &va = ch_abs[c];
+            std::sort(va.begin(), va.end());
+            size_t n = va.size();
+            abs_p95 = va[(n * 95) / 100];
+            abs_p99 = va[(n * 99) / 100];
+        }
+        fprintf(stdout,
+                "  %s: max ULP=%u, diverged=%zu / %zu"
+                "  p50=%u p95=%u p99=%u"
+                "  abs: max=%.3e p95=%.3e p99=%.3e\n",
+                label, max_ulp[c], diverged[c], pixels, p50, p95, p99,
+                max_abs[c], abs_p95, abs_p99);
         if (max_ulp[c] > overall_max)
             overall_max = max_ulp[c];
         overall_div += diverged[c];
@@ -263,6 +328,34 @@ int run_parity_check(const char *inputFile, const char *outputFile,
                 "CPU=%.9g GPU=%.9g (%u ULP)\n",
                 first_diff_pixel, first_diff_channel,
                 first_diff_cpu, first_diff_gpu, first_diff_ulp);
+
+        //
+        // Worst-pixel dump: input RGBA + CPU/GPU output RGBA + the
+        // channel where the largest ULP drift landed. Feeds directly
+        // into step-by-step CTL-chain debugging of a single sample.
+        //
+        const uint32_t in_channels = image_buffer.depth();
+        const float *in_ptr = image_buffer.ptr();
+        const size_t wx = worst_pixel % image_buffer.width();
+        const size_t wy = worst_pixel / image_buffer.width();
+        fprintf(stdout,
+                "  worst pixel: (x=%zu, y=%zu)  channel=%u  %u ULP\n",
+                wx, wy, worst_channel, worst_ulp);
+        fprintf(stdout, "    input : ");
+        for (uint32_t c = 0; c < in_channels; ++c)
+            fprintf(stdout, "%.9g%s",
+                    in_ptr[worst_pixel * in_channels + c],
+                    c + 1 == in_channels ? "\n" : ", ");
+        fprintf(stdout, "    CPU   : ");
+        for (uint32_t c = 0; c < channels; ++c)
+            fprintf(stdout, "%.9g%s",
+                    cpu_ptr[worst_pixel * channels + c],
+                    c + 1 == channels ? "\n" : ", ");
+        fprintf(stdout, "    GPU   : ");
+        for (uint32_t c = 0; c < channels; ++c)
+            fprintf(stdout, "%.9g%s",
+                    gpu_ptr[worst_pixel * channels + c],
+                    c + 1 == channels ? "\n" : ", ");
     }
 
     std::string cpu_out = insert_tag(outputFile, "cpu");

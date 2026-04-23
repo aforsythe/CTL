@@ -14,6 +14,7 @@
 //-----------------------------------------------------------------------------
 
 #include <CtlMetalAddr.h>
+#include <CtlMetalCodegen.h>
 #include <CtlMetalFunctionCall.h>
 #include <CtlMetalInterpreter.h>
 #include <CtlMetalLContext.h>
@@ -42,6 +43,13 @@ struct MetalInterpreter::Data
     id<MTLDevice>       device = nil;
     id<MTLCommandQueue> queue = nil;
     unsigned long       maxInstCount = 100000000;
+
+    //
+    // Shared MSL emitter. One per interpreter — every MetalModule loaded
+    // here writes into this instance so a kernel from any one module can
+    // see the function definitions of every module it imports.
+    //
+    MetalCodegen        codegen;
 
     //
     // Host-side SIMD sidecar. Preloaded with every module the user hands
@@ -110,6 +118,18 @@ SimdInterpreter &
 MetalInterpreter::sidecar() const
 {
     return *_data->sidecar;
+}
+
+MetalCodegen &
+MetalInterpreter::codegen()
+{
+    return _data->codegen;
+}
+
+const MetalCodegen &
+MetalInterpreter::codegen() const
+{
+    return _data->codegen;
 }
 
 bool

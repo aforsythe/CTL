@@ -15,7 +15,6 @@
 //
 //-----------------------------------------------------------------------------
 
-#include <CtlMetalCodegen.h>
 #include <CtlModule.h>
 #include <map>
 #include <memory>
@@ -23,6 +22,7 @@
 
 namespace Ctl {
 
+class MetalCodegen;
 class MetalInterpreter;
 class MetalPipeline;
 
@@ -41,12 +41,13 @@ class MetalModule : public Module
     MetalInterpreter &  interpreter() { return _interpreter; }
 
     //
-    // The per-module MSL emitter. Syntax-tree-node generateCode() walks
-    // write into this; the resulting source compiles on first kernel
-    // dispatch.
+    // The shared MSL emitter owned by the interpreter. Syntax-tree-node
+    // generateCode() walks write into this; the interpreter's other
+    // MetalModules share the same instance so imported function helpers
+    // are visible to callers in any module that imports them.
     //
-    MetalCodegen &      codegen()       { return _codegen; }
-    const MetalCodegen &codegen() const { return _codegen; }
+    MetalCodegen &      codegen();
+    const MetalCodegen &codegen() const;
 
     //
     // Get (and lazily compile) the MetalPipeline for a kernel named
@@ -59,17 +60,16 @@ class MetalModule : public Module
     //
     // Allocate a fresh MSL identifier for a module-scope static variable
     // (one emitted as a `constant T name = value;` global in the codegen
-    // header). Each call returns a name unique within this module:
-    // "static0", "static1", ...
+    // header). The counter lives on the shared codegen so names stay
+    // unique across every module loaded into the interpreter: "static0",
+    // "static1", ...
     //
     std::string         nextStaticName();
 
   private:
 
     MetalInterpreter &  _interpreter;
-    MetalCodegen        _codegen;
     std::map<std::string, std::unique_ptr<MetalPipeline>> _pipelines;
-    int                 _nextStaticIndex = 0;
 };
 
 } // namespace Ctl

@@ -4,7 +4,9 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <CtlMetalModule.h>
+#include <CtlMetalCodegen.h>
 #include <CtlMetalDispatch.h>
+#include <CtlMetalInterpreter.h>
 
 namespace Ctl {
 
@@ -29,10 +31,22 @@ MetalModule::runInitCode()
     //
 }
 
+MetalCodegen &
+MetalModule::codegen()
+{
+    return _interpreter.codegen();
+}
+
+const MetalCodegen &
+MetalModule::codegen() const
+{
+    return _interpreter.codegen();
+}
+
 std::string
 MetalModule::nextStaticName()
 {
-    return "static" + std::to_string(_nextStaticIndex++);
+    return _interpreter.codegen().nextStaticName();
 }
 
 MetalPipeline &
@@ -49,7 +63,7 @@ MetalModule::pipelineFor(const std::string &kernelName)
     // kernel entry points that this call will never dispatch.
     //
     std::unique_ptr<MetalPipeline> p(
-        new MetalPipeline(_codegen.sourceForKernel(kernelName), kernelName));
+        new MetalPipeline(codegen().sourceForKernel(kernelName), kernelName));
     MetalPipeline &ref = *p;
     _pipelines.emplace(kernelName, std::move(p));
     return ref;

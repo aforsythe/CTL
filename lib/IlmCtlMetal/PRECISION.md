@@ -403,6 +403,62 @@ pow`'s 1-ULP floor across 7+ per-pixel pow calls into a 293-ULP
 downstream tail — the "hard downstream blocker" condition this entry
 had been parked behind.
 
+### `a*b+c` → `metal::fma` peephole in MetalBinaryOpNode — **reverted** (2026-04-22)
+
+Prototyped on the hypothesis that Apple Clang's default
+`-ffp-contract=on` would contract CPU-side `a*b+c` into a single
+`fmadd` and that mirroring the contraction on Metal would tighten
+the ACES v2 matrix-multiply drift. Measured on marci-512 /
+Rec.709 full pipeline:
+
+- Without fusion: ch0 20670 / ch1 712 / ch2 431 max ULP
+- With fusion:    ch0 20670 / ch1 622 / ch2 364 max ULP
+
+ACES gain is marginal. More importantly the hypothesis turned
+out wrong: CPU `SimdInterpreter` lowers each CTL binary op to a
+separate `SimdInst` whose result is stored to an arena buffer
+before the next op reads it, so Clang never fuses across them —
+the CPU reference stays double-rounded on `a*b+c`. A Metal-side
+fusion therefore makes Metal *tighter* than CPU and breaks gated
+0-ULP tests: `testMetalArithmetic` sample 18 (`x = a * 2.0 + b`)
+failed at 1 ULP on the `CTL_USE_ACCELERATE=ON` build.
+
+Reverted. The right future direction is either (a) teach
+`SimdInterpreter` to emit a fused `MulAdd` SimdInst so both
+paths fuse symmetrically, or (b) accept the CPU double-rounded
+floor as the reference and keep Metal matching it bit-for-bit
+on simple arithmetic.
+
+### `precise::pow` vs FreeBSD port on macOS 26.3 — **re-measured, no change** (2026-04-22)
+
+Re-ran the A/B on macOS 26.3 / M4 Max against today's libm to check
+whether Apple had tightened `precise::pow` since 2026-04-19.
+Probe: `pow(fabs(x), 0.42)` on 0002.exr's 2.2M pixels (the
+workload ACES v2 `post_adaptation_cone_response_compression_fwd`
+exercises).
+
+| pow impl | max ULP | ch0 div rate | ch1 div rate | ch2 div rate |
+|----------|--------:|-------------:|-------------:|-------------:|
+| FreeBSD `e_powf.c` (shipped) | 1 | 7.0% | 6.8% | 7.8% |
+| `metal::precise::pow`        | 1 | 53% | 26% | 26% |
+
+Both hit the 1-ULP correctly-rounded bound, but the FreeBSD port
+lands on the *correct* side of the halfway point 3–7× more often
+against scalar libm. The existing choice stands; no switch.
+
+### `atan2f` port on macOS 26.3 — **NOT attempted** (2026-04-22)
+
+Considered porting FreeBSD's `e_atan2f.c` to close the residual
+1–2 ULP of `metal::precise::atan2` that compounds through
+`Aab_to_JMh`'s hue path in ACES v2. Not attempted: `e_atan2f.c`
+calls `atanf` internally, and the 2026-04-19 `atan` measurement
+(above) showed the FreeBSD `s_atanf.c` port regresses from 1 ULP
+to 25 ULP because its `aT[]` coefficients are an FP64-tuned
+minimax that loses precision in single-precision evaluation.
+`e_atan2f.c` would inherit the same regression. Re-evaluate only
+after a single-precision-tuned atan minimax is derived; direct
+port is **not the answer** for this function family.
+
 ### Colorspace forward transforms — inherited `pow` drift
 
 `LuvtoXYZ` / `LabtoXYZ` (inverses) are **0 ULP** — no `pow` on the
@@ -514,6 +570,99 @@ collapse to 0 at the same time.
   `tonemapAndCompress_inv` wrapper divides `luminanceTS` by
   `TSPARAMS.n_r` before calling `tonescale_inv`; without this the
   clamp saturates every typical-magnitude input to the same value.
+
+### ACES v2 Rec.709 output transform — multi-file import path (2026-04-22)
+
+Context: the two entries above (full gamut mapper; fwd+inv round-trip)
+drive `aces_combined.ctl`, a flat single-file concatenation of the
+`Lib.Academy.*` helpers and the Rec.709 output transform. Up through
+2026-04-21 it was the *only* ACES v2 workload the Metal backend could
+compile, because each `MetalModule` owned its own `MetalCodegen` and a
+kernel built from one module's codegen never saw the MSL bodies of
+its imports. The 2026-04-22 shared-codegen change (codegen moved to
+`MetalInterpreter`; user-function addrs module-qualified so imported
+helpers don't collide) lets the backend compile the actual shipping
+`aces-output/d65/rec709/Output.Academy.Rec709-D65_100nit_in_Rec709-D65_BT1886.ctl`,
+which imports `Lib.Academy.Utilities`, `Lib.Academy.Tonescale`,
+`Lib.Academy.OutputTransform`, and `Lib.Academy.DisplayEncoding`.
+
+- **Measured** (macOS 26.3 / M4 Max, 2026-04-22, natural imagery;
+  `ctlrender-metal --parity-check -format tiff16`, CPU reference
+  built with `CTL_USE_ACCELERATE=OFF` so the CPU side also runs
+  scalar libm). Per-channel stats aggregated over diverged samples
+  only; "abs" is max absolute float32 difference in the output, "p99"
+  is the 99th percentile ULP across diverged samples.
+
+  | Input (pixels) | ch0 max ULP | ch0 p99 | ch0 abs max | ch2 max ULP | ch2 p99 | ch2 abs max |
+  |---|---:|---:|---:|---:|---:|---:|
+  | marci-512 (200 704) | 20670 | 464 | 2.2e-5 | 364 | 81 | 6.2e-5 |
+  | 0001 (2.2M) | 62 | — | — | 136 389 | — | — |
+  | 0002 (2.2M) | 321 694 | 464 | 2.2e-5 | 1 312 975 | 81 | 6.2e-5 |
+  | 0006 (2.2M) | 762 | — | — | 518 335 | — | — |
+  | 0013 (2.2M) | 14 380 | — | — | 882 131 | — | — |
+  | 0019 (2.2M) | 111 | — | — | 3 072 | — | — |
+
+  Typical-case drift is 3–9 ULP (p50) / 17–464 ULP (p99). Max-ULP
+  outliers run into the millions on 0002 but correspond to **output
+  values near zero** where `ULP(1e-6) ≈ 1e-13` magnifies a normal
+  1-ULP per-op drift into a 10⁶-ULP "headline." The honest metric is
+  the absolute-diff column: **max abs diff ≤ 8e-5** across every
+  sample input and channel, which is ~5 levels at 16-bit and well
+  under one level at 8-bit. 8-bit TIFF outputs differ by 0–5 bytes
+  out of 805 KB (marci-512) with max ±1 per byte.
+
+- **Drift entry point, bisected** (0002 input, Rec.709 output
+  transform split into four `-ctl` probes feeding a bit-identical
+  prefix of the full pipeline):
+
+  | Stopping after | ch0 abs max | ch1 abs max | ch2 abs max |
+  |---|---:|---:|---:|
+  | `clamp_AP0_to_AP1` | **0** | **0** | **0** |
+  | + `RGB_to_Aab` | 1.8e-7 | 1.2e-4 | 2.1e-5 |
+  | + `Aab_to_JMh` | 2.3e-5 | 1.1e-4 | **2.2e-2** |
+  | + `tonemap_and_compress_fwd` | 3.4e-5 | 9.5e-5 | 2.2e-2 |
+  | + `gamut_compress_fwd` | 3.8e-5 | 7.1e-5 | 2.2e-2 |
+  | full pipeline (+ `display_encoding`) | 2.2e-5 | 7.8e-5 | 6.2e-5 |
+
+  Drift first appears in `RGB_to_Aab`, which runs
+  `mult_f3_f33` + `post_adaptation_cone_response_compression_fwd` (=
+  `pow(x, 0.42)` per channel) + `mult_f3_f33`. `Aab_to_JMh` then
+  amplifies via `atan2` + `wrap_to_360` near the hue-0 boundary.
+  `display_encoding` re-amplifies again via `pow(L, 1/2.4)` near
+  L=0.
+
+- **Worst-pixel analysis** (0002, pixel (1088, 122) at
+  `RGB_to_Aab` output, input `(0.0124, 0.0118, 0.0120)` — nearly
+  neutral gray):
+
+  ```
+  CPU Aab = (0.160698,  0.606914, -4.84e-7)
+  GPU Aab = (0.160698,  0.606916, -3.69e-6)
+  ```
+
+  `A` and `a` agree to ~1e-6. The `b` coordinate — the input to
+  `atan2` for hue — has cancelled down near zero because the input
+  is nearly on the achromatic axis, so normal ~1-ULP drift in the
+  matrix multiply and the `pow(x, 0.42)` calls becomes dominant in
+  the residual. `atan2` itself is faithful; it just gets a ~3e-6
+  disagreement on its `y` argument. **Catastrophic cancellation in
+  user-level CTL math, not a backend deviation.**
+
+- **Root cause (no new deviation class):** every ULP traces back to
+  the per-function entries above — `pow`'s 1-ULP floor (7% div rate
+  on this workload; see measurement in the ROI log below),
+  `atan2`'s 2-ULP floor at the `precise::atan2` baseline, and
+  arithmetic amplification at ACES-v2-specific cusps (hue wrap,
+  gamma-toe, CAM16 cancellation at neutrals). None of these can be
+  tightened without either (a) deriving a single-precision-tuned
+  minimax for the transcendental involved — unexplored — or (b) an
+  FP64 path on the GPU, which Apple Silicon doesn't provide.
+
+- **Threshold:** not asserted. This is an end-user rendering
+  workload, not a gated regression fixture. Parity is guarded via
+  `testMetalAcesV2Parity` on the flat single-file fixture (above);
+  the multi-file path shares the same codegen and stdlib, so a
+  regression there will flag first in the gated test.
 
 ## CPU-side backend affects measured parity (Accelerate / sleef)
 

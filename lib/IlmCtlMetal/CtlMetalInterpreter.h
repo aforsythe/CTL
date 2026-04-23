@@ -22,6 +22,7 @@
 namespace Ctl {
 
 class SimdInterpreter;
+class MetalCodegen;
 class MetalSidecarCache;
 
 class MetalInterpreter : public Interpreter
@@ -37,6 +38,15 @@ class MetalInterpreter : public Interpreter
 
     // Name of the MTLDevice this interpreter is bound to (for diagnostics).
     std::string     deviceName() const;
+
+    //
+    // Shared MSL emitter. Every MetalModule loaded into this interpreter
+    // writes its function helpers, struct decls, and kernel wrappers into
+    // this single codegen instance so that a kernel compiled from one
+    // module sees the function definitions of every module it imports.
+    //
+    MetalCodegen &          codegen();
+    const MetalCodegen &    codegen() const;
 
     //
     // The host-side SIMD sidecar. Every module that loads into this

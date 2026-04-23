@@ -118,6 +118,16 @@ class MetalCodegen
     std::string         nextTempName();
 
     //------------------------------------------------------------
+    // Module-scope static-variable name generator. Returns
+    // `staticN` with a monotonically increasing N so every
+    // module-scope `constant T name = ...;` global gets a unique
+    // MSL identifier across every module loaded into the
+    // interpreter that owns this codegen.
+    //------------------------------------------------------------
+
+    std::string         nextStaticName();
+
+    //------------------------------------------------------------
     // Struct declaration registry.
     //
     // Call `ensureStructDeclared` before referencing a struct type
@@ -255,6 +265,7 @@ class MetalCodegen
     std::vector<std::string>    _exprStack;
 
     size_t              _tempCounter;
+    size_t              _staticCounter;
 
     std::set<std::string>       _declaredStructs;
 

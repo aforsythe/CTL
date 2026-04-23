@@ -49,6 +49,47 @@ codegenOf(LContext &lcontext)
     return static_cast<MetalLContext &>(lcontext).metalModule()->codegen();
 }
 
+//
+// Fold a CTL module name into a valid MSL identifier fragment by mapping
+// every character that would otherwise be illegal in a C identifier
+// (`.`, `-`, etc.) to an underscore. The result is prepended to user
+// function helper/kernel names so imports from different modules do not
+// collide in the shared codegen.
+//
+std::string
+sanitizeForIdentifier(const std::string &s)
+{
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        const bool ok =
+            (c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') ||
+            c == '_';
+        out += ok ? c : '_';
+    }
+    return out;
+}
+
+//
+// Build the globally-unique base name for a user-defined function's
+// MetalFunctionAddr. The name follows `<sanitized-module>__<function>`
+// so the emitted helper is `__ctl_<sanitized-module>__<function>` and
+// the kernel wrapper is `<sanitized-module>__<function>_kernel`.
+// Modules with no name (internal stdlib scaffold) fall back to the
+// bare function name.
+//
+std::string
+qualifiedFunctionBaseName(const SymbolInfoPtr &info,
+                          const std::string &functionName)
+{
+    if (!info) return functionName;
+    const Module *mod = info->module();
+    if (!mod || mod->name().empty()) return functionName;
+    return sanitizeForIdentifier(mod->name()) + "__" + functionName;
+}
+
 std::string
 paramMslName(int i)
 {
@@ -483,14 +524,14 @@ vsArrayChainStride(const DataType *elemType,
 }
 
 //
-// Depth-first search for a user-defined CTL function call inside an
-// initializer expression subtree. Stdlib calls (MetalStdLibFuncAddr) are
-// ignored — many stdlib helpers (e.g. `asin`, `exp`) lower to MSL
-// `constant`-legal intrinsic calls on some compiler versions and to
-// explicit constexpr arithmetic on others; either way MSL itself decides
-// whether the initializer compiles. User-function calls, however, are
-// always rejected by MSL as `constant` initializers, so they're the
-// trigger for routing the value through the host-side SIMD sidecar.
+// Depth-first search for any function call inside an initializer
+// expression subtree — user-defined OR stdlib. Apple's current MSL
+// compiler rejects *any* non-constexpr function call as a `constant`
+// global initializer (the backend emits a global constructor, which
+// the Metal runtime refuses with "cannot have global constructors"),
+// so both user helpers and stdlib helpers like `sqrt` / `mult_f33_f33`
+// must be routed through the host-side SIMD sidecar and substituted
+// with a bit-exact literal aggregate at codegen time.
 //
 bool
 containsUserFunctionCall(const ExprNodePtr &expr)
@@ -499,18 +540,7 @@ containsUserFunctionCall(const ExprNodePtr &expr)
         return false;
 
     if (CallNodePtr call = expr.cast<CallNode>()) {
-        if (call->function && call->function->info) {
-            MetalStdLibFuncAddrPtr sa =
-                call->function->info->addr().cast<MetalStdLibFuncAddr>();
-            if (!sa)
-                return true;
-        } else {
-            return true;
-        }
-        for (size_t i = 0; i < call->arguments.size(); ++i)
-            if (containsUserFunctionCall(call->arguments[i]))
-                return true;
-        return false;
+        return true;
     }
     if (BinaryOpNodePtr b = expr.cast<BinaryOpNode>()) {
         return containsUserFunctionCall(b->leftOperand) ||
@@ -667,7 +697,8 @@ MetalFunctionNode::generateCode(LContext &lcontext)
     const DataTypePtr &retType = ftype->returnType();
     const bool voidReturn = retType && retType.cast<VoidType>();
 
-    MetalFunctionAddrPtr addr = new MetalFunctionAddr(name);
+    MetalFunctionAddrPtr addr =
+        new MetalFunctionAddr(qualifiedFunctionBaseName(info, name));
     const std::string fnName    = addr->helperName();
     const std::string kernelName = addr->kernelName();
 
@@ -1290,6 +1321,18 @@ MetalBinaryOpNode::generateCode(LContext &lcontext)
     // Mirror the CPU SIMD pattern: evaluate each operand, cast to the
     // common operandType, then combine. MSL's && / || are short-circuit
     // at expression level (no explicit branch needed here).
+    //
+    // Note: CPU SimdInterpreter lowers each CTL binary op to a separate
+    // SimdInst that stores its result to an arena buffer before the next
+    // op reads it, which keeps `a*b + c` double-rounded on the CPU
+    // reference. A peephole that folded `(a*b)+c` into `metal::fma` was
+    // prototyped on 2026-04-22 but had to be reverted because it made
+    // Metal single-rounded on that pattern and broke testMetalArithmetic
+    // sample 18 (`x = a * 2.0 + b`) at 1-ULP strict parity. ACES v2
+    // gain from the fusion was marginal (ch1 max ULP 712→622, ch2
+    // 431→364 on marci-512); not worth the parity regression. If the
+    // CPU SimdInterpreter's arithmetic lowering ever becomes
+    // contract-on, revisit.
     //
     leftOperand->generateCode(lcontext);
     operandType->generateCastFrom(leftOperand, lcontext);

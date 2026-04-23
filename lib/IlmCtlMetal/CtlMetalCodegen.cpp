@@ -2162,6 +2162,7 @@ MetalCodegen::MetalCodegen()
       _kernelBufferIndex(0),
       _kernelActive(nullptr),
       _tempCounter(0),
+      _staticCounter(0),
       _printUsed(false),
       _assertUsed(false),
       _halfExpLogUsed(false)
@@ -2318,6 +2319,12 @@ std::string
 MetalCodegen::nextTempName()
 {
     return "__ctl_tmp_" + std::to_string(_tempCounter++);
+}
+
+std::string
+MetalCodegen::nextStaticName()
+{
+    return "static" + std::to_string(_staticCounter++);
 }
 
 void
