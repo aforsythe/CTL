@@ -345,6 +345,13 @@ MetalInterpreterCache::~MetalInterpreterCache() = default;
 Ctl::MetalInterpreter &
 MetalInterpreterCache::get(const char *filename)
 {
+    // Single lock around both the map lookup and the lazy construction.
+    // Held across the `loadFile` call on the first hit for a given .ctl
+    // (seconds of sidecar load + MSL compile), which is intentional —
+    // only one worker should do that work per-.ctl, and any other
+    // worker asking for the same filename needs to wait for the slot
+    // to be fully initialized before reading it.
+    std::lock_guard<std::mutex> guard(cacheMutex);
     auto &slot = byFilename[std::string(filename)];
     if (!slot)
     {

@@ -1,14 +1,18 @@
-# Regression test for the ctlrender-metal -jobs clamp.
+# Regression test for ctlrender-metal's -jobs>1 behavior in non-parity
+# mode. The historic clamp-to-1 was removed once the MetalInterpreterCache
+# and MetalFunctionCall were made thread-safe; this test guards against
+# regressions in that concurrency contract.
 #
 # Expected contract:
-#   1) ctlrender-metal -jobs N (N > 1) exits cleanly on a multi-file batch.
-#   2) Every input file produces its corresponding output.
-#   3) stderr carries a warning that names "-jobs=N" and mentions that it
-#      was clamped.
-#
-# The clamp is a workaround for a concurrency crash in the shared
-# MetalInterpreter. If someone later removes the clamp without also
-# making concurrent transform() calls safe, this test fires.
+#   1) ctlrender-metal -jobs N (N > 1) exits cleanly on a multi-file
+#      batch.
+#   2) Every input file produces its corresponding output (no races on
+#      output-path setup or pipeline state).
+#   3) No crash or hang — if someone introduces shared mutable state
+#      without a guarding mutex, concurrent workers would surface it as
+#      a sporadic crash/wrong-output. Running the batch with a larger
+#      -jobs than there are input files exercises any worker-contention
+#      paths (second worker starts with the file vector empty).
 #
 # Inputs (passed via -D):
 #   CTLRENDER_METAL  - path to ctlrender-metal executable
@@ -61,15 +65,12 @@ if(NOT _output_count EQUAL _input_count)
         "got ${_output_count}. stderr:\n${_stderr}")
 endif()
 
+# Non-parity -jobs>1 must no longer emit a clamp warning. If one shows
+# up, it means the clamp was re-introduced for the normal code path.
 string(REGEX MATCH "clamping to -jobs=1" _has_clamp "${_stderr}")
-if(NOT _has_clamp)
+if(_has_clamp)
     message(FATAL_ERROR
-        "Expected clamp warning in stderr; got:\n${_stderr}")
-endif()
-
-string(REGEX MATCH "-jobs=${JOBS_REQUESTED}" _has_requested "${_stderr}")
-if(NOT _has_requested)
-    message(FATAL_ERROR
-        "Expected stderr to echo the requested -jobs=${JOBS_REQUESTED}; "
-        "got:\n${_stderr}")
+        "Unexpected clamp warning in stderr — the non-parity -jobs>1 "
+        "path should run the batch in parallel now, not clamp.\n"
+        "stderr:\n${_stderr}")
 endif()

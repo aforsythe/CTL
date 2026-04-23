@@ -17,6 +17,7 @@
 //-----------------------------------------------------------------------------
 
 #include <CtlInterpreter.h>
+#include <mutex>
 #include <string>
 
 namespace Ctl {
@@ -47,6 +48,16 @@ class MetalInterpreter : public Interpreter
     //
     MetalCodegen &          codegen();
     const MetalCodegen &    codegen() const;
+
+    //
+    // Lock this before entering `MetalFunctionCall::callFunction` under
+    // -jobs>1 so that two file workers sharing the same MetalInterpreter
+    // (same `.ctl` file re-used across workers) serialize their GPU
+    // dispatches. Different `MetalInterpreter` instances (different
+    // `.ctl` files) have their own mutex and run concurrently. See
+    // `MetalFunctionCall::callFunction` for the lock-acquire site.
+    //
+    std::mutex &            callMutex();
 
     //
     // The host-side SIMD sidecar. Every module that loads into this

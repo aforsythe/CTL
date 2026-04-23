@@ -46,6 +46,22 @@ struct MetalInterpreter::Data
     unsigned long       maxInstCount = 100000000;
 
     //
+    // Serializes `MetalFunctionCall::callFunction` dispatches on this
+    // interpreter under -jobs>1. The interpreter's per-call scratch
+    // (MTLCommandBuffer, persistent MTLBuffer pool for non-persistent
+    // bindings, error-flag atomic) is not safe under concurrent calls
+    // from different file workers that happened to land on the same
+    // `MetalInterpreter` (same `.ctl` reused across workers).
+    //
+    // Granularity: one lock per dispatch. Decode/encode still run off
+    // the GPU on the worker thread before/after the locked span, so
+    // same-interpreter workers overlap I/O while the GPU kernel
+    // serializes. Different-interpreter workers (different `.ctl`
+    // files) hold different mutexes and run fully concurrently.
+    //
+    std::mutex          callMutex;
+
+    //
     // Shared MSL emitter. One per interpreter — every MetalModule loaded
     // here writes into this instance so a kernel from any one module can
     // see the function definitions of every module it imports.
@@ -125,6 +141,12 @@ MetalCodegen &
 MetalInterpreter::codegen()
 {
     return _data->codegen;
+}
+
+std::mutex &
+MetalInterpreter::callMutex()
+{
+    return _data->callMutex;
 }
 
 const MetalCodegen &

@@ -220,6 +220,19 @@ MetalFunctionCall::callFunction(size_t numSamples)
             "CTL Metal backend: callFunction numSamples must be > 0.");
 
     //
+    // Under ctlrender-metal -jobs>1 two file workers may share the same
+    // MetalInterpreter (same `.ctl` reused across workers). Per-dispatch
+    // state on the interpreter (command queue, persistent MTLBuffer
+    // pool for non-persistent bindings, error-flag atomic) is not safe
+    // across concurrent callFunction invocations, so serialize here.
+    // Distinct-interpreter workers each lock their own mutex and run
+    // fully concurrently; same-interpreter workers serialize only for
+    // the dispatch itself and overlap decode/encode on their own
+    // threads outside this span.
+    //
+    std::lock_guard<std::mutex> callGuard(_interpreter.callMutex());
+
+    //
     // Resize each host-side arg buffer to match this dispatch; then flatten
     // the parameter list into MetalKernelBinding entries in declaration
     // order so __arg<i> in the emitted MSL aligns to parameters()[i].

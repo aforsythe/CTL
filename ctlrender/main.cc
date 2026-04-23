@@ -1014,18 +1014,34 @@ int main(int argc, const char **argv)
 		// rely on the decode/compute/encode pipeline below for batch
 		// throughput. Covers the parity-check-serial case too (races
 		// on parity_exit_code).
-		if (file_jobs != 1)
+		//
+		// Metal backend allows -jobs>1 under two correctness rules:
+		//
+		//   1. MetalInterpreterCache::get() is mutex-protected (see
+		//      ctlrender/transform.hh), so concurrent first-time
+		//      loadFile() calls for the same `.ctl` serialize rather
+		//      than racing on the byFilename map.
+		//   2. MetalFunctionCall::callFunction() takes the per-
+		//      interpreter callMutex, so same-interpreter workers
+		//      (same `.ctl` re-used across workers) serialize their
+		//      GPU dispatches while overlapping decode/encode.
+		//
+		// Throughput gain scales with distinct `.ctl` files in the
+		// batch: N files / K distinct `.ctl`s → effective parallelism
+		// min(N, K, hardware). Same-.ctl-only batches still benefit
+		// from pipelining decode/compute/encode across workers even
+		// though the kernel dispatches serialize.
+		//
+		// `--parity-check` is still clamped below: the parity_exit_code
+		// atomic and the side-by-side CPU vs GPU comparison in
+		// run_parity_check were not audited for concurrent callers.
+		//
+		if (file_jobs > 1 && parity_check)
 		{
-			if (file_jobs > 1)
-			{
-				fprintf(stderr,
-				    "ctlrender-metal: -jobs=%d requested but the Metal "
-				    "backend runs a single shared interpreter and "
-				    "command queue; clamping to -jobs=1 and relying on "
-				    "the decode/compute/encode pipeline for batch "
-				    "throughput.\n",
-				    file_jobs);
-			}
+			fprintf(stderr,
+			    "ctlrender-metal: --parity-check serializes the file "
+			    "batch; clamping -jobs=%d to 1.\n",
+			    file_jobs);
 			file_jobs = 1;
 		}
 #endif
