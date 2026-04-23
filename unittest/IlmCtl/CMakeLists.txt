@@ -10,6 +10,7 @@ set(SOURCES
 	testHugeInit.cpp
 	testInlineHelpers.cpp
 	testParser.cpp
+	testPathParser.cpp
 	testSimdRegAddr.cpp
 	testSimdRegOwnership.cpp
 	testUniformBoolDefault.cpp
@@ -73,6 +74,7 @@ file(COPY
 	testNameSpace.ctl
 	testNoName.ctl
 	testParse.ctl
+	testPathParser.ctl
 	testScope2.ctl
 	testScope.ctl
 	testUniformBoolDefault.ctl

@@ -57,6 +57,7 @@
 #include <testEndOfLine.h>
 #include <testInlineHelpers.h>
 #include <testParser.h>
+#include <testPathParser.h>
 #include <testConcurrentCalls.h>
 #include <testCppCall.h>
 #include <testDebugger.h>
@@ -83,6 +84,7 @@ main (int argc, char *argv[])
 
     TEST (testEndOfLine);
     TEST (testParser);
+    TEST (testPathParser);
     TEST (testExc);
     TEST (testSimdRegAddr);
     TEST (testSimdRegOwnership);
