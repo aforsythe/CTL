@@ -5,6 +5,7 @@ set(SOURCES
 	testExamples.cpp
 	testHugeInit.cpp
 	testParser.cpp
+	testPathParser.cpp
 	testVarying.cpp
 	testVaryingLookup.cpp
 	testVaryingReturn.cpp
@@ -61,6 +62,7 @@ file(COPY
 	testNameSpace.ctl
 	testNoName.ctl
 	testParse.ctl
+	testPathParser.ctl
 	testScope2.ctl
 	testScope.ctl
 	testStdLibrary.ctl
