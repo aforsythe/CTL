@@ -164,7 +164,17 @@ MetalFunctionCall::MetalFunctionCall(MetalInterpreter &interpreter,
         // leave `populateDefault` unset and the kernel would see
         // garbage for any `input varying float x = 1.;`-style param.
         //
-        if (p.isReadable()) {
+        // Skip the lookup entirely when `p.defaultValue` is null —
+        // the parser only emits the synthetic `$<paramName>` static
+        // for params that actually have a default, so a null
+        // defaultValue guarantees no static exists. Without this
+        // gate, every default-less readable param missed in the
+        // cache, fired the warm-cache repair path, and paid the
+        // full sidecar load (~300 ms per invocation — visible as a
+        // 2× regression on the 1-frame 2K bench for any CTL whose
+        // main has no defaults, e.g. aces_combined).
+        //
+        if (p.isReadable() && p.defaultValue) {
             const std::string staticName = name + "$" + p.name;
             size_t nbytes = 0;
             const char *bytes =
