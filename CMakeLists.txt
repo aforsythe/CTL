@@ -15,6 +15,7 @@ add_definitions( -DPACKAGE="${PROJECT_NAME}" -DVERSION="${PROJECT_VERSION}" )
 
 option(CTL_BUILD_TESTS "Build the unit tests" ON)
 option(CTL_BUILD_TOOLS "Build the utility commands (ctlrender, etc)" ON)
+option(CTL_BUILD_MODULETEST "Build ctltest, the module-level test framework" ON)
 option(BUILD_SHARED_LIBS "Build all libraries as shared" OFF )
 
 # Vectorized stdlib transcendentals.  The fast path routes the 4096-lane
@@ -461,3 +462,11 @@ if(CTL_ENABLE_DEBUGGER)
   add_subdirectory(ctldb)
   add_subdirectory(ctldap)
 endif()
+
+if (CTL_BUILD_MODULETEST)
+  if (NOT CTL_BUILD_TESTS)
+    enable_testing()
+  endif()
+  add_subdirectory(moduletest)
+endif()
+
