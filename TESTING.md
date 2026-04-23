@@ -1,111 +1,135 @@
 # Testing the CTL performance branches
 
-`ship/cpu-perf` is the shared base.  Three feature branches sit as
-**siblings on top of it**, each adding one orthogonal capability:
+The ship branches form a linear stack on top of `master`.  Each branch
+adds one capability to the one below it; pick the branch with the work
+you want and it includes everything below it.
 
 ```
-ship/cpu-perf                  ← shared base: CPU performance + interpreter tests
-├─ ship/gpu-metal              ← + Apple Silicon Metal GPU backend
-├─ ship/moduleTestFramework-v1 ← + YAML-driven module test framework
-└─ ship/ctl-debugger           ← this branch: + ctldb (REPL) + ctldap (DAP server)
+ship/gpu-metal            ← + Apple Silicon Metal GPU backend (Apple Silicon only)
+ship/moduleTestFramework  ← this branch: + YAML-driven module test framework
+ship/ctl-debugger         ← + ctldb (REPL) + ctldap (DAP server)
+ship/cpu-perf             ← CPU performance work
+master                    ← pre-branch baseline
 ```
 
-Each sibling is independently testable: pick the feature you want to
-evaluate, check out that branch, build, run `ctest`.  No need to pick
-up unrelated work.
+`ship/moduleTestFramework` is the recommended branch on Linux, Windows,
+and Intel Macs — it has every platform-agnostic capability.  Apple
+Silicon users who additionally want the Metal GPU backend should pull
+`ship/gpu-metal`.
 
----
-
-## If you're on this branch (`ship/ctl-debugger`)
-
-This branch adds a single-pixel debugger for CTL modules: a REPL CLI
-(`ctldb`) and a Debug Adapter Protocol server (`ctldap`) consumed by
-the [vscode-ctl-debug](https://github.com/aforsythe/vscode-ctl-debug)
-extension.  The debugger is gated on `-DCTL_ENABLE_DEBUGGER=ON`; OFF
-by default so normal builds pay zero cost.
-
-### Build and test
-
-```bash
-git checkout ship/ctl-debugger
-cmake -B build-dbg -DCMAKE_BUILD_TYPE=Debug -DCTL_ENABLE_DEBUGGER=ON
-cmake --build build-dbg -j
-ctest --test-dir build-dbg                            # should be green
-```
-
-The full ctest pulls in the cpu-perf interpreter tests (including
-`testDebugger` inside `IlmCtlTest`).  To run only the debugger
-end-to-end surface:
-
-```bash
-ctest --test-dir build-dbg -L 'ctldb|ctldap'          # 7 tests
-```
-
-### Try it interactively
-
-```bash
-# REPL session against a CTL file:
-./build-dbg/ctldb/ctldb -ctl path/to/transform.ctl --break transform.ctl:42
-
-# DAP server (the vscode extension launches this for you):
-./build-dbg/ctldap/ctldap < dap-session.txt
-```
-
-The cpu-perf base is also active on this branch — the section below
-applies if you also want to evaluate the CPU perf work.
-
----
-
-## If you're on this branch (`ship/cpu-perf`)
-
-This branch contains CPU-side performance work only: vectorized
-stdlib transcendentals (Apple Accelerate or sleef), threaded tile
-dispatch, file-level `-jobs`, host-native arch + thin LTO + hidden
-visibility + profile-guided optimization, and a `-pixel` CLI mode
-for single-pixel transforms.  No Metal GPU backend.
-
-### Build and test
+## Build and test
 
 ```bash
 git clone <your-fork>/CTL.git && cd CTL
-git checkout ship/cpu-perf
+git checkout ship/moduleTestFramework
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-(cd build && ctest)                                   # should be green
+(cd build && ctest)
 ```
+
+On Apple Silicon, the same build will exercise the CPU path; switch to
+`ship/gpu-metal` for the GPU backend.
 
 ### Run from the build tree — do not `make install`
 
-Test against your own workloads using the binary in the build
+Test against your own workloads using the binaries in the build
 directory directly:
 
 ```bash
 ./build/ctlrender/ctlrender -ctl <your.ctl> in.exr out.exr
 ```
 
-`make install` is not necessary and is not recommended while you're
-evaluating; it would place the binary in system directories
-(`/usr/local/bin/...`) where it could shadow a production install.
-Keep everything inside your checkout.
+`make install` is not necessary and not recommended while you're
+evaluating; it would place the binaries in system directories
+(`/usr/local/bin/...`) where they could shadow a production install.
 
-### Quick single-pixel check
+## What's in each branch
+
+### `ship/cpu-perf`
+
+CPU SIMD interpreter performance work:
+
+- Vectorized stdlib transcendentals (Apple Accelerate on macOS, sleef
+  cross-platform).
+- Threaded tile dispatch + file-level `-jobs N`.
+- Host-native ISA (`-mcpu=native`), thin LTO, hidden visibility, and
+  profile-guided optimization as defaults.
+- `-pixel r,g,b[,a]` CLI mode — apply a CTL chain to a single pixel
+  and print the result, no file I/O.
+- Inline-substitution of idiomatic `Lib.Academy.Utilities` helpers
+  (min/max/clip/copysign/wrap_to_360/radians_to_degrees/degrees_to_radians)
+  routed through the SIMD interpreter's batched-math path.
+
+### `ship/ctl-debugger`
+
+Single-pixel debugger for CTL programs.  Two binaries gated on
+`-DCTL_ENABLE_DEBUGGER=ON` (OFF by default; normal builds pay no cost):
+
+- `ctldb` — REPL with breakpoints, step, locals inspector.
+- `ctldap` — Debug Adapter Protocol server, consumed by the
+  [vscode-ctl-debug](https://github.com/aforsythe/vscode-ctl-debug)
+  extension.
 
 ```bash
-./build/ctlrender/ctlrender -ctl <your.ctl> -pixel 0.5,0.25,0.1,1.0
-./build/ctlrender/ctlrender -help pixel
+cmake -B build-dbg -DCMAKE_BUILD_TYPE=Debug -DCTL_ENABLE_DEBUGGER=ON
+cmake --build build-dbg -j
+./build-dbg/ctldb/ctldb -ctl path/to/transform.ctl --break transform.ctl:42
 ```
 
-### Opt-outs if you hit a problem
+### `ship/moduleTestFramework` (this branch)
+
+`ctltest` is a declarative conformance framework for CTL modules.
+Tests are YAML specs referencing a CTL module plus one of three
+input modes; the runner marshals typed CTL values in and out, compares
+outputs against a chosen oracle, and reports TAP or JUnit XML for CI.
 
 ```bash
--DCTL_PGO=OFF                # disable profile-guided optimization
--DCTL_NATIVE_ARCH=OFF        # portable-arch build (older hardware)
--DCTL_LTO=OFF                # disable thin LTO
--DCTL_HIDDEN_VISIBILITY=OFF  # if you're building SHARED libs for an external ABI
+./build/moduletest/cli/ctltest --help
+./build/moduletest/cli/ctltest path/to/your/tests/
+./build/moduletest/cli/ctltest --junit junit.xml path/to/tests/
+./build/moduletest/cli/ctltest --tap path/to/tests/ > results.tap
+```
+
+Authoring references live in `moduletest/examples/`; the spec format,
+oracle behaviour, and marshaling rules are in `moduletest/docs/`.
+
+### `ship/gpu-metal` (Apple Silicon only)
+
+Adds the Apple Silicon Metal GPU backend and a sibling
+`ctlrender-metal` CLI.  Requires macOS 14+ on an M1 or newer.  See
+`lib/IlmCtlMetal/PRECISION.md` for end-to-end parity bounds.
+
+## Code coverage
+
+ctltest can produce statement-level coverage of `.ctl` modules in lcov
+format:
+
+```
+cmake -B build -DCTL_ENABLE_COVERAGE=ON
+cmake --build build -j8
+./build/moduletest/cli/ctltest --coverage out.info path/to/suite.yaml
+genhtml out.info -o out-html --filter missing
+```
+
+The `Ubuntu-Coverage` GitHub Actions workflow runs on every push and
+PR, uploads `coverage.info` + the genhtml HTML as workflow artifacts,
+and (if `CODECOV_TOKEN` is configured) posts a Codecov comment with
+file-level deltas.
+
+See [`moduletest/docs/COVERAGE.md`](moduletest/docs/COVERAGE.md) for
+local + CI usage and known limitations.
+
+## Opt-outs
+
+```bash
+-DCTL_PGO=OFF                                  # disable profile-guided optimization
+-DCTL_NATIVE_ARCH=OFF                          # portable-arch build
+-DCTL_LTO=OFF                                  # disable thin LTO
+-DCTL_HIDDEN_VISIBILITY=OFF                    # if building SHARED libs for an external ABI
 -DCTL_USE_ACCELERATE=OFF -DCTL_USE_SLEEF=OFF   # scalar libm (bit-exact to pre-branch master)
 ```
 
-### Reporting results
+## Reporting results
 
 Please include:
 
@@ -113,14 +137,14 @@ Please include:
 /usr/bin/time -p ./build/ctlrender/ctlrender -ctl … in.exr out.exr
 ```
 
-plus your hardware (CPU model), input image size + format, CTL
-transform used, and the measured wall-time.  File an issue at
-`<your-repo>/issues` with the numbers.
+plus your hardware, input image size + format, CTL transform used, and
+the measured wall-time.
 
-### Known limits
+## Known limits
 
-- Builds on every tier-1 target (Linux, Windows, macOS Intel, macOS
-  Apple Silicon).
-- Bit-exact against pre-branch master on the default build (no
-  Accelerate / sleef).
-- ≤1 ULP per transcendental on the vectorized path.
+- **CPU path** builds and runs on every tier-1 target.  Bit-exact
+  against pre-branch master with both vector libraries OFF; ≤1 ULP
+  per transcendental on the vectorized path.
+- **Module test framework** has no platform restrictions.
+- **Metal backend** (on `ship/gpu-metal`) requires Apple Silicon GPU
+  family 7+.
