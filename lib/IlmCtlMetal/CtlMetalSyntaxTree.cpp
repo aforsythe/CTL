@@ -1052,7 +1052,8 @@ MetalVariableNode::generateCode(LContext &lcontext)
 
             size_t nbytes = 0;
             const char *bytes =
-                interp.lookupSidecarBytes(absoluteName, nbytes);
+                interp.lookupSidecarBytes(absoluteName, nbytes,
+                                          info ? info->module() : nullptr);
             if (!bytes)
                 throw IEX_NAMESPACE::LogicExc(
                     std::string("CTL Metal backend: host-side sidecar "

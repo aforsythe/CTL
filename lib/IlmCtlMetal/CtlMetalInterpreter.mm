@@ -29,6 +29,7 @@
 #include <Iex.h>
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -178,27 +179,108 @@ MetalInterpreter::flushSidecarCache(const std::string &topSourcePath)
 
 const char *
 MetalInterpreter::lookupSidecarBytes(const std::string &absoluteName,
-                                     size_t &byteCountOut) const
+                                     size_t &byteCountOut,
+                                     const Module *owningModule)
 {
     byteCountOut = 0;
     if (!_data) return nullptr;
 
     //
     // Cache first. On a valid preload this is the only path that
-    // returns — the sidecar hasn't been fed any modules so its symbol
-    // table is empty. On a cold run the harvest pass adds each symbol
-    // to the cache immediately after sidecar.loadModule succeeds, so
-    // consumers still see their bytes here.
+    // normally returns — the sidecar hasn't been fed any modules so its
+    // symbol table is empty. On a cold run the harvest pass adds each
+    // symbol to the cache immediately after sidecar.loadModule succeeds,
+    // so consumers still see their bytes here.
     //
     const char *bytes = _data->cache.lookup(absoluteName, byteCountOut);
     if (bytes) return bytes;
 
     //
-    // Fallback to the live sidecar. Reached only during cold runs when
-    // the harvest pass hasn't yet populated a symbol the consumer is
-    // asking about (should not happen because harvest runs right after
-    // each sidecar.loadModule, but the fallback keeps correctness if
-    // that ordering ever slips).
+    // Warm-cache repair: a prior run wrote an on-disk cache that's
+    // missing `absoluteName` (e.g. harvest never ran for the owning
+    // module, or the module was added to an import graph after the
+    // cache was last refreshed). Demand-load the owning module into
+    // the sidecar now, harvest its symbols into the cache, and retry
+    // the cache lookup. The flushSidecarCache path will refresh the
+    // on-disk file before exit so the next run finds it complete.
+    //
+    // Only runs when the caller supplied the owning module; legacy
+    // callers without one fall through to the live-sidecar fallback
+    // and ultimately to nullptr if that's empty too.
+    //
+    if (owningModule && _data->sidecar &&
+        !_data->sidecar->moduleIsLoaded(owningModule->name()))
+    {
+        //
+        // Ask the sidecar to resolve the module by name through its own
+        // CTL_MODULE_PATH lookup, which transitively pulls every import
+        // in the right order. Passing the source text inline here would
+        // only load this one module and leave its imports unresolved —
+        // causing parse errors like "Applied member access operator to
+        // non-struct of type int" when a type defined in Lib.Academy.*
+        // isn't in the sidecar's symbol table yet.
+        //
+        const bool debugPhase =
+            std::getenv("CTL_METAL_CACHE_DEBUG") != nullptr;
+        auto t0 = std::chrono::high_resolution_clock::now();
+        bool loaded = false;
+        try {
+            _data->sidecar->loadModule(owningModule->name());
+            loaded = true;
+        } catch (...) {
+            // Fall through to the live-sidecar fallback below.
+        }
+        if (loaded) {
+            if (debugPhase) {
+                auto t1 = std::chrono::high_resolution_clock::now();
+                double ms = std::chrono::duration<double, std::milli>(
+                                t1 - t0).count();
+                std::cerr << "CTL Metal sidecar repair.loadModule("
+                          << owningModule->name() << ") " << ms << " ms"
+                          << std::endl;
+            }
+            if (!owningModule->fileName().empty())
+                _data->cache.markSource(owningModule->fileName());
+
+            //
+            // Harvest every module-scope data symbol the sidecar now
+            // holds — not just the one we were asked about, and not
+            // just from the owning module. The recursive load above
+            // brought in imports too, and all of their module-scope
+            // consts deserve to land in the persistent cache so we
+            // don't re-run this repair on the next warm run.
+            //
+            const SymbolTable &sideSym = _data->sidecar->symbolTable();
+            size_t harvested = 0;
+            for (auto it = sideSym.begin(); it != sideSym.end(); ++it) {
+                const SymbolInfoPtr &info = it->second;
+                if (!info) continue;
+                if (!info->module()) continue;
+                SimdDataAddrPtr addr = info->addr().cast<SimdDataAddr>();
+                if (!addr || !addr->reg()) continue;
+                DataTypePtr dt = info->dataType();
+                if (!dt) continue;
+                const size_t n = dt->objectSize();
+                if (n == 0) continue;
+                _data->cache.add(it->first, (*addr->reg())[0], n);
+                ++harvested;
+            }
+            if (harvested > 0) _data->cacheDirty = true;
+            if (debugPhase) {
+                std::cerr << "CTL Metal sidecar repair.harvest total="
+                          << harvested << std::endl;
+            }
+            bytes = _data->cache.lookup(absoluteName, byteCountOut);
+            if (bytes) return bytes;
+        }
+    }
+
+    //
+    // Fallback to the live sidecar. Reached during cold runs when the
+    // harvest pass hasn't yet populated a symbol the consumer is
+    // asking about, and (post-repair) when the repair load populated
+    // the sidecar's symbol table but the symbol is an alias or
+    // per-invocation computation that doesn't survive harvest.
     //
     if (!_data->sidecar) return nullptr;
     SymbolInfoPtr sym = _data->sidecar->symbolTable().lookupSymbol(absoluteName);
@@ -323,8 +405,25 @@ MetalInterpreter::newLContext(std::istream &file,
     // own loadModule is a no-op on modules it already has, so already-
     // loaded dependencies are cheap.
     //
+    //
+    // Load the module into the host-side sidecar even on a warm
+    // run where the on-disk cache preload hit. An earlier
+    // `!cacheValid` gate here skipped the sidecar load whenever
+    // the cache was present, which left the live sidecar's symbol
+    // table empty — fine for `lookupSidecarBytes` (served from the
+    // cache bytes) but broken for everything else that expects the
+    // sidecar to actually hold the parsed module: default-argument
+    // propagation in `MetalFunctionCall` looks up synthetic
+    // `func$param` statics whose values live only in the sidecar's
+    // live reg for the owning module, and can't be recovered from
+    // cache bytes alone. Paying the ~200 ms/module sidecar load on
+    // every run is well below Metal's own cold compile cost and
+    // below any real-workload frame-batch amortization, so the
+    // cache now exists purely as a lookup-time convenience (early
+    // in-memory bytes + persistence across runs) rather than as
+    // a sidecar-load skip.
+    //
     if (module && _data && _data->sidecar &&
-        !_data->cacheValid &&
         !_data->sidecar->moduleIsLoaded(module->name())) {
         //
         // The istream we were handed is live — consume it into a string,
@@ -361,25 +460,30 @@ MetalInterpreter::newLContext(std::istream &file,
 
         //
         // Harvest every module-scope data symbol with a populated reg
-        // into the cache. Doing it incrementally (per module) keeps
-        // consumer lookups cheap during the same parse even though the
-        // sidecar still holds the data itself — and when the top-level
-        // load finishes `flushSidecarCache` writes the complete set to
-        // disk for the next run to consume.
-        //
-        // Filter on module *name*: the sidecar constructed its own
-        // SimdModule pointer, so `info->module()` compared to our
-        // MetalModule pointer never matches. The name is unique per
-        // Interpreter::_loadModule and stable across sidecar + Metal.
+        // into the cache. This runs after each MetalInterpreter-driven
+        // `sidecar.loadModule`, which itself resolves `import` clauses
+        // recursively on the sidecar (SimdInterpreter's own parser) —
+        // so the sidecar's symbol table after one call contains this
+        // module's *and every transitively-imported module's* entries.
+        // An earlier version filtered the harvest to symbols whose
+        // owning module name matched the currently-loading module's,
+        // which quietly dropped every imported module's consts from
+        // the persistent cache. Cold runs masked the loss because
+        // `lookupSidecarBytes` falls back to the live sidecar symbol
+        // table — but on the next warm run the cache preload made
+        // `newLContext` skip the sidecar load entirely, leaving no
+        // live-sidecar fallback, and consumers of an imported const
+        // hit the "host-side sidecar has no evaluated value" path.
+        // The fix is to harvest *everything* the sidecar holds: its
+        // symbol table only contains modules we've (transitively)
+        // loaded, so there's nothing else to exclude.
         //
         const SymbolTable &sideSym = _data->sidecar->symbolTable();
-        const std::string &modName = module->name();
         size_t harvested = 0;
         for (auto it = sideSym.begin(); it != sideSym.end(); ++it) {
             const SymbolInfoPtr &info = it->second;
             if (!info) continue;
-            if (!info->module() ||
-                info->module()->name() != modName) continue;
+            if (!info->module()) continue;
             SimdDataAddrPtr addr = info->addr().cast<SimdDataAddr>();
             if (!addr || !addr->reg()) continue;
             DataTypePtr dt = info->dataType();
@@ -390,7 +494,7 @@ MetalInterpreter::newLContext(std::istream &file,
             ++harvested;
         }
         if (debugPhase) {
-            std::cerr << "CTL Metal sidecar harvest mod=" << modName
+            std::cerr << "CTL Metal sidecar harvest mod=" << module->name()
                       << " harvested=" << harvested
                       << std::endl;
         }

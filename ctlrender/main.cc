@@ -1454,11 +1454,18 @@ int main(int argc, const char **argv)
 								slot.reset(new Ctl::MetalInterpreter);
 								char abs[PATH_MAX];
 								const char *topAbs = realpath(fn, abs) ? abs : fn;
-								const bool hit =
-									slot->preloadSidecarCache(topAbs);
+								slot->preloadSidecarCache(topAbs);
 								slot->loadFile(fn, mod);
-								if (!hit)
-									slot->flushSidecarCache(topAbs);
+								//
+								// Always flush — no-op if nothing was
+								// harvested, but captures any warm-cache
+								// repair that ran from the sidecar-lookup
+								// fallback in MetalVariableNode. Without
+								// this the next run would find the same
+								// incomplete on-disk cache and re-run
+								// the repair each time.
+								//
+								slot->flushSidecarCache(topAbs);
 							}
 						}
 					}

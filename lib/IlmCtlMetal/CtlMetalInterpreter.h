@@ -88,8 +88,21 @@ class MetalInterpreter : public Interpreter
     // the live sidecar's symbol table. Returns nullptr if neither has
     // it. `byteCountOut` is filled with the blob size on a hit.
     //
+    // When `owningModule` is non-null and the cache preload is a HIT but
+    // the symbol is missing from both cache and live sidecar, this
+    // synchronously loads `owningModule`'s CTL source into the sidecar,
+    // runs its init code, harvests the freshly-evaluated module-scope
+    // symbols into the cache, and retries the lookup. This heals stale
+    // or incomplete on-disk caches that a prior run may have written
+    // (e.g. one where a module got parsed but its symbols didn't make
+    // it through the harvest filter, leaving consumers on the next
+    // warm run with no way to resolve a module-scope const). Callers
+    // that already know the owning module (every `MetalVariableNode`
+    // does) should pass it so the repair path can run.
+    //
     const char *            lookupSidecarBytes (const std::string &absoluteName,
-                                                size_t &byteCountOut) const;
+                                                size_t &byteCountOut,
+                                                const Module *owningModule = nullptr);
 
     //
     // True iff `preloadSidecarCache` succeeded for the current session.
