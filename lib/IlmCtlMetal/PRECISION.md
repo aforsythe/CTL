@@ -313,6 +313,55 @@ below stay until either (a) Apple exposes FP64 on Silicon GPU (not
 announced), or (b) a specific function's diverged-fraction is judged
 too high and gets its own port landed.
 
+### `scatteredDataToGrid3D` — full MSL port of CtlRbfInterpolator
+
+- **Measured** (macOS 26.3 / M4 Max, 2026-04-23, `testMetalScatterKernel`
+  kernel-reachable fixture, n=5 identity RBF evaluated on a 4³ grid
+  with per-lane execution over 8 lanes): max **1 ULP**, max absolute
+  diff **2.98e-8**, matching FP32 quantization. Per-pixel RBF on
+  marci-512 (n=9, 6³ grid) measured R max **9 ULP**, G max **111 ULP**,
+  B max **57 ULP** post-Kahan — all at p50=2-3 ULP typical drift, with
+  the outlier tail concentrated at near-zero output values (ULP-near-
+  zero pathology). tiff16 deliverable output diffs at most **1 level
+  out of 65535** on the red channel only; G/B/A bit-identical.
+
+- **Implementation:** `ctl_stdlib_scatteredDataToGrid3D` in
+  `CtlMetalCodegen.cpp` runs the full CPU algorithm in MSL: 12-
+  coefficient affine fit via 4×4 Cholesky, per-sample σ via brute-
+  force 4-NN, three-channel conjugate-gradient solve with
+  on-the-fly matvec (no materialized matrix), and the 3D grid
+  eval loop. All three CG inner reductions (rr, pAp, rr_new) plus
+  the per-row matvec sum and the grid-eval RBF-weight sums run
+  with Kahan compensated summation, cutting FP32 accumulation
+  error from O(n·eps) to O(eps) at the cost of 3 extra FLOPs per
+  term. Hard cap `kMaxRbfSamples=256`; larger inputs set
+  `__ctl_err_flag` bit 2 and terminate through a dedicated
+  `Iex::NoImplExc`. Varying inputs (`data`/`pMin`/`pMax` differing
+  across lanes) set bit 1 — the MSL body runs per-lane so
+  per-lane-varying inputs WOULD work semantically, but the per-lane
+  cost is prohibitive (~30·n·n² FLOPs × per-lane).
+
+- **Root cause of residual FP32 drift:** the CPU reference runs the
+  linear solve in `double` (via `LSSCG<double, CRSOperator<double>>`)
+  with convergence tolerance 1e-7; the Metal port runs FP32 throughout
+  (Apple Silicon GPU has no FP64) at tolerance 1e-7 squared. Kahan
+  brings the FP32 reduction error to O(eps), but the matrix entries
+  themselves (kernel values, distances) are FP32-rounded, so the
+  converged λ values lie ~1-2 ULP from the CPU-FP64 solution even
+  after Kahan. Downstream grid eval then inherits that drift.
+
+- **Threshold:** not CI-gated today. `testMetalScatterKernel` runs
+  as a smoke test (1 ULP on identity data is the contract); the
+  non-identity per-pixel marci exercise in `scatterMarci.ctl` is an
+  ad-hoc reproducer under `unittest/IlmCtlMetal/` rather than a
+  ctest fixture. Upgrade path: wire a parity threshold when a real
+  caller needs it.
+
+- **Plan-to-close:** 1-2 remaining ULPs are the FP32 matrix-entry
+  rounding floor. Double-float emulation of the CG solve could reach
+  0 ULP parity at ~50× perf cost; not pursued since the baseline
+  already rounds to tiff16 at 1 level.
+
 ## ROI decisions log
 
 These ports were attempted and reverted, or deliberately not attempted.
@@ -458,6 +507,28 @@ minimax that loses precision in single-precision evaluation.
 `e_atan2f.c` would inherit the same regression. Re-evaluate only
 after a single-precision-tuned atan minimax is derived; direct
 port is **not the answer** for this function family.
+
+### `scatteredDataToGrid3D` Kahan summation in CG inner products — **landed** (2026-04-23)
+
+After the initial plain-FP32 port of `scatteredDataToGrid3D` landed,
+the CG inner reductions (`rr`, `pAp`, `rr_new`) plus the per-row
+matvec sum and the grid-eval RBF-weight sums were switched to Kahan
+compensated summation. Measurement on the marci-512 per-pixel
+exerciser (n=9, 6³ grid):
+
+|          | pre-Kahan max ULP | post-Kahan max ULP |
+|----------|------------------:|-------------------:|
+| ch R     | 7                 | 9                  |
+| ch G     | 271               | **111**            |
+| ch B     | 198               | **57**             |
+
+Net **2-3× reduction on the outlier G/B tail**, roughly-neutral on R
+(7 → 9 within measurement noise). Typical (p50) drift stayed at 2
+ULP — the improvement concentrates in samples where near-zero
+residuals accumulate across many CG iterations. tiff16 deliverable
+output unchanged (already saturated at max |Δ|=1 level on R only;
+G/B/A bit-identical). Cost: 3 extra FLOPs per term across the
+reductions, negligible next to the n² matvec work.
 
 ### Colorspace forward transforms — inherited `pow` drift
 
