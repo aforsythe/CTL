@@ -5,6 +5,7 @@ set(SOURCES
 	testExamples.cpp
 	testHugeInit.cpp
 	testParser.cpp
+	testUniformBoolDefault.cpp
 	testVarying.cpp
 	testVaryingLookup.cpp
 	testVaryingReturn.cpp
@@ -63,6 +64,7 @@ file(COPY
 	testParse.ctl
 	testScope2.ctl
 	testScope.ctl
+	testUniformBoolDefault.ctl
 	testStdLibrary.ctl
 	testStruct.ctl
 	testTypes.ctl
