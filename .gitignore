@@ -9,3 +9,4 @@ Testing
 .vs
 CMakeSettings.json
 benchmarks/inputs/
+.worktrees/
