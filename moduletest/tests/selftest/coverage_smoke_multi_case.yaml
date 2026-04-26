@@ -1,0 +1,33 @@
+version: 1
+suite: ctltest-selftest-coverage-multi-case
+
+modules:
+  - coverage_smoke
+
+module_paths:
+  - .
+
+defaults:
+  tolerance:
+    abs: 1.0e-6
+
+tests:
+  - id: false_branch
+    description: Call add_or_negate with negate=false; takes the else branch (line 13).
+    function: coverage_smoke::add_or_negate
+    inputs:
+      a: 2.0
+      negate: false
+    oracle:
+      inline:
+        r: 3.0
+
+  - id: true_branch
+    description: Call add_or_negate with negate=true; takes the then branch (line 9).
+    function: coverage_smoke::add_or_negate
+    inputs:
+      a: 2.0
+      negate: true
+    oracle:
+      inline:
+        r: -2.0

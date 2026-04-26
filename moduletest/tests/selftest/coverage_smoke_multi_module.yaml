@@ -1,0 +1,33 @@
+version: 1
+suite: ctltest-selftest-coverage-multi-module
+
+modules:
+  - coverage_smoke
+  - coverage_helper
+
+module_paths:
+  - .
+
+defaults:
+  tolerance:
+    abs: 1.0e-6
+
+tests:
+  - id: smoke_case
+    description: Exercise coverage_smoke::add_or_negate (false branch).
+    function: coverage_smoke::add_or_negate
+    inputs:
+      a: 2.0
+      negate: false
+    oracle:
+      inline:
+        r: 3.0
+
+  - id: helper_case
+    description: "Exercise coverage_helper::add_two so its SF block appears in the lcov output."
+    function: coverage_helper::add_two
+    inputs:
+      a: 2.0
+    oracle:
+      inline:
+        r: 4.0

@@ -70,18 +70,53 @@ if(EXISTS "${_manifest}")
   endforeach()
 endif()
 
-# End-to-end smoke test for ctltest --coverage. Only meaningful in coverage
-# builds, so gated on CTL_ENABLE_COVERAGE. Runs the user-facing CLI on a
-# fixture with one taken and one unreached branch and grep-checks the lcov
-# output for both hit and unreached records.
+# End-to-end ctest cases for ctltest --coverage. Only meaningful in coverage
+# builds, so gated on CTL_ENABLE_COVERAGE. All three cases share the
+# RunCoverageSmokeAssertions.cmake driver and pass their own MUST_MATCH
+# regex list — adding another case is one add_test() call.
 if(CTL_ENABLE_COVERAGE)
+    set(_cov_driver ${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunCoverageSmokeAssertions.cmake)
+
+    # Single-case smoke: only the false branch is reached → DA:13,N>0,
+    # DA:9,0 (true branch unreached).
     add_test(
         NAME ctltest::coverage_smoke
         COMMAND ${CMAKE_COMMAND}
             -DCTLTEST=$<TARGET_FILE:ctltest>
             -DSUITE=${CMAKE_CURRENT_SOURCE_DIR}/tests/selftest/coverage_smoke.yaml
             -DOUTFILE=${CMAKE_CURRENT_BINARY_DIR}/coverage_smoke.info
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunCoverageSmoke.cmake
+            -DMUST_MATCH=SF:.*coverage_smoke\\.ctl;\nDA:13,[1-9];\nDA:9,0\n
+            -P ${_cov_driver}
     )
-    set_tests_properties(ctltest::coverage_smoke PROPERTIES LABELS "ctltest")
+
+    # Multi-case aggregation: two cases on the same module with opposite
+    # values of `negate` cover BOTH branches → DA:13,N>0 AND DA:9,N>0.
+    add_test(
+        NAME ctltest::coverage_smoke_multi_case
+        COMMAND ${CMAKE_COMMAND}
+            -DCTLTEST=$<TARGET_FILE:ctltest>
+            -DSUITE=${CMAKE_CURRENT_SOURCE_DIR}/tests/selftest/coverage_smoke_multi_case.yaml
+            -DOUTFILE=${CMAKE_CURRENT_BINARY_DIR}/coverage_smoke_multi_case.info
+            -DMUST_MATCH=SF:.*coverage_smoke\\.ctl;\nDA:9,[1-9];\nDA:13,[1-9]
+            -P ${_cov_driver}
+    )
+
+    # Multi-module aggregation: two cases hit functions in two different
+    # modules; lcov output must contain SF: blocks for BOTH source files.
+    add_test(
+        NAME ctltest::coverage_smoke_multi_module
+        COMMAND ${CMAKE_COMMAND}
+            -DCTLTEST=$<TARGET_FILE:ctltest>
+            -DSUITE=${CMAKE_CURRENT_SOURCE_DIR}/tests/selftest/coverage_smoke_multi_module.yaml
+            -DOUTFILE=${CMAKE_CURRENT_BINARY_DIR}/coverage_smoke_multi_module.info
+            -DMUST_MATCH=SF:.*coverage_smoke\\.ctl;SF:.*coverage_helper\\.ctl
+            -P ${_cov_driver}
+    )
+
+    set_tests_properties(
+        ctltest::coverage_smoke
+        ctltest::coverage_smoke_multi_case
+        ctltest::coverage_smoke_multi_module
+        PROPERTIES LABELS "ctltest"
+    )
 endif()
