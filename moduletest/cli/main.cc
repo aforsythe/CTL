@@ -28,6 +28,8 @@
 #include "TapReporter.h"
 #include "YamlLoader.h"
 
+#include <CtlSimdCoverage.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -51,6 +53,7 @@ struct Options {
     std::string  outputPath;
     std::string  filter;
     bool         color = true;
+    std::string  coveragePath;          // empty = disabled
     std::vector<std::string> inputs;
 };
 
@@ -65,6 +68,8 @@ void usage(const char* argv0) {
         "  --no-color                       disable ANSI color (console)\n"
         "  --update-snapshots[=force]       write snapshot oracles (force overwrites existing)\n"
         "  --allow-new-snapshots            record missing snapshots without failing the run\n"
+        "  --coverage FILE                  write SIMD interpreter coverage as lcov .info to FILE\n"
+        "                                   (requires build with -DCTL_ENABLE_COVERAGE=ON)\n"
         "  -h, --help                       show this help\n",
         argv0);
 }
@@ -117,6 +122,9 @@ int parseArgs(int argc, char** argv, Options& out) {
             setenv("CTL_TEST_UPDATE_SNAPSHOTS", "force", 1);
         } else if (!std::strcmp(a, "--allow-new-snapshots")) {
             setenv("CTL_TEST_ALLOW_NEW_SNAPSHOTS", "1", 1);
+        } else if (!std::strcmp(a, "--coverage")) {
+            const char* v = needsValue(i); if (!v) return 2;
+            out.coveragePath = v;
         } else if (!std::strcmp(a, "-h") || !std::strcmp(a, "--help")) {
             usage(argv[0]);
             return 1;
@@ -261,6 +269,18 @@ int main(int argc, char** argv) {
         totals.errored        += c.errored;
         totals.skipped        += c.skipped;
         totals.unexpectedPass += c.unexpectedPass;
+    }
+
+    if (!opts.coveragePath.empty()) {
+        if (!Ctl::SimdCoverage::enabled()) {
+            std::fprintf(stderr,
+                         "warning: --coverage ignored: built without "
+                         "CTL_ENABLE_COVERAGE\n");
+        } else if (!Ctl::SimdCoverage::flushToLcov(opts.coveragePath, "ctltest")) {
+            std::fprintf(stderr,
+                         "warning: failed to write coverage to %s\n",
+                         opts.coveragePath.c_str());
+        }
     }
 
     if (tap)   tap->finalizePlan();

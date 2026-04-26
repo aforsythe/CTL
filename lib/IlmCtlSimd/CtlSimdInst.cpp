@@ -59,6 +59,7 @@
 //-----------------------------------------------------------------------------
 
 #include <CtlSimdInst.h>
+#include <CtlSimdCoverage.h>
 #include <CtlSimdDebugger.h>
 #include <CtlSimdInterpreter.h>
 #include <sstream>
@@ -164,6 +165,9 @@ SimdInst::setNextInPath (const SimdInst *nextInPath)
 void
 SimdInst::executePath (SimdBoolMask &mask, SimdXContext &xcontext) const
 {
+#ifdef CTL_ENABLE_COVERAGE
+    Ctl::SimdCoverage::discoverChain (this, xcontext.fileName());
+#endif
     for (const SimdInst *inst = this; inst; inst = inst->_nextInPath)
     {
 	//
@@ -178,6 +182,10 @@ SimdInst::executePath (SimdBoolMask &mask, SimdXContext &xcontext) const
 	    return;
 
 	xcontext.setLineNumber(inst->lineNumber());
+
+#ifdef CTL_ENABLE_COVERAGE
+	Ctl::SimdCoverage::record (xcontext.fileName(), inst->lineNumber());
+#endif
 
 	debug_only(cout << "fileName=" << xcontext.fileName() << " ");
 	debug_only(cout << "lineNumber=" << xcontext.lineNumber() << " ");

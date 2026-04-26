@@ -62,6 +62,7 @@
 #include <CtlSimdReg.h>
 #include <CtlSimdInst.h>
 #include <CtlSimdAddr.h>
+#include <CtlSimdCoverage.h>
 
 using namespace std;
 
@@ -121,6 +122,13 @@ SimdModule::runInitCode ()
 	xcontext.setModule(this);
 	xcontext.run (1, _firstInitInst);
     }
+
+#ifdef CTL_ENABLE_COVERAGE
+    // Eagerly register every instrumentable line in this module so that
+    // functions which are never called still appear as DA:N,0 in lcov.
+    // Runs once per module load, after all code has been generated.
+    SimdCoverage::discoverModule (this);
+#endif
 }
 
 

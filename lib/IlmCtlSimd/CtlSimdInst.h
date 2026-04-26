@@ -99,6 +99,7 @@ class SimdInst
     void		printPath (int indent) const;
 
     int                 lineNumber() const { return _lineNumber; }
+    const SimdInst *    nextInPath() const { return _nextInPath; }
 
   private:
 
@@ -141,6 +142,9 @@ class SimdBranchInst: public SimdInst
 
     virtual void	print (int indent) const;
 
+    const SimdInst *    truePath()  const { return _truePath; }
+    const SimdInst *    falsePath() const { return _falsePath; }
+
   private:
 
     const SimdInst *		_truePath;
@@ -161,6 +165,9 @@ class SimdLoopInst: public SimdInst
 				 SimdXContext &xcontext) const;
 
     virtual void	print (int indent) const;
+
+    const SimdInst *    conditionPath() const { return _conditionPath; }
+    const SimdInst *    loopPath()      const { return _loopPath; }
 
   private:
 
@@ -186,6 +193,8 @@ class SimdCallInst: public SimdInst
 				 SimdXContext &xcontext) const;
 
     virtual void	print (int indent) const;
+
+    const SimdInst *    callPath() const { return _callPath; }
 
   private:
 
@@ -477,6 +486,8 @@ class SimdFileNameInst: public SimdInst
 				 SimdXContext &xcontext) const;
 
     virtual void	print (int indent) const;
+
+    const std::string & fileName() const { return _fileName; }
 
   private:
 

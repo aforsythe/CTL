@@ -1,4 +1,5 @@
 add_subdirectory(IlmCtl)
+add_subdirectory(IlmCtlSimd)
 add_subdirectory(IlmCtlMath)
 add_subdirectory(IlmImfCtl)
 if (CTL_BUILD_TOOLS)

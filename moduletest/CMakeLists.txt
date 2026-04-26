@@ -69,3 +69,19 @@ if(EXISTS "${_manifest}")
     endif()
   endforeach()
 endif()
+
+# End-to-end smoke test for ctltest --coverage. Only meaningful in coverage
+# builds, so gated on CTL_ENABLE_COVERAGE. Runs the user-facing CLI on a
+# fixture with one taken and one unreached branch and grep-checks the lcov
+# output for both hit and unreached records.
+if(CTL_ENABLE_COVERAGE)
+    add_test(
+        NAME ctltest::coverage_smoke
+        COMMAND ${CMAKE_COMMAND}
+            -DCTLTEST=$<TARGET_FILE:ctltest>
+            -DSUITE=${CMAKE_CURRENT_SOURCE_DIR}/tests/selftest/coverage_smoke.yaml
+            -DOUTFILE=${CMAKE_CURRENT_BINARY_DIR}/coverage_smoke.info
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunCoverageSmoke.cmake
+    )
+    set_tests_properties(ctltest::coverage_smoke PROPERTIES LABELS "ctltest")
+endif()

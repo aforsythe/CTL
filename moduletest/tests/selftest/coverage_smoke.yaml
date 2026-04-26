@@ -1,0 +1,23 @@
+version: 1
+suite: ctltest-selftest-coverage-smoke
+
+modules:
+  - coverage_smoke
+
+module_paths:
+  - .
+
+defaults:
+  tolerance:
+    abs: 1.0e-6
+
+tests:
+  - id: false_branch_only
+    description: Call add_or_negate with negate=false; takes the else branch only.
+    function: coverage_smoke::add_or_negate
+    inputs:
+      a: 2.0
+      negate: false
+    oracle:
+      inline:
+        r: 3.0

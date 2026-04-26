@@ -1,0 +1,101 @@
+name: Ubuntu-Coverage
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  # Coverage is expensive (full Debug build + ctest + genhtml). Restricting
+  # `push` to main/master avoids running it twice on the same commit (once on
+  # the feature-branch PR, once on the merge push).  Feature branches get
+  # coverage via the `pull_request` trigger only.
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - 'README.md'
+      - 'doc/**'
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'doc/**'
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: run apt-get update
+      run: sudo apt-get -y update
+
+    - name: install libtiff
+      run: sudo apt-get -y install libtiff-dev
+
+    - name: install ilmbase
+      run: sudo apt-get -y install libilmbase-dev
+
+    - name: install openexr
+      run: sudo apt-get -y install libopenexr-dev
+
+    - name: install lcov
+      run: sudo apt-get -y install lcov
+
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCTL_ENABLE_COVERAGE=ON
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build -j$(nproc)
+
+    - name: ctest (ctltest label)
+      working-directory: ${{github.workspace}}/build
+      run: ctest -L ctltest --output-on-failure
+
+    - name: collect coverage info
+      run: |
+        # Run ctltest against the full self-test corpus to produce one
+        # consolidated .info that covers every fixture file.
+        ${{github.workspace}}/build/moduletest/cli/ctltest \
+          --coverage ${{github.workspace}}/build/coverage.info \
+          moduletest/tests/selftest/
+
+    - name: generate HTML report
+      run: |
+        # --filter missing tolerates synthetic SF: records emitted by
+        # SimdCoverage::flushToLcov (e.g. "<ctltest-embedded-testkit>",
+        # "unknown") that have no on-disk file.  Without it, genhtml exits
+        # non-zero with "ERROR: <ctltest-embedded-testkit> is not readable".
+        # See moduletest/docs/COVERAGE.md "Known v1 limitations" — the root
+        # fix is to skip synthetic paths in flushToLcov; deferred.
+        genhtml ${{github.workspace}}/build/coverage.info \
+          --output-directory ${{github.workspace}}/build/coverage-html \
+          --title "CTL module coverage" \
+          --legend \
+          --filter missing
+
+    - name: upload to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ${{github.workspace}}/build/coverage.info
+        flags: ctl-modules
+        name: ctl-module-coverage
+        # Codecov outages must not block PR merges.  The artifact upload
+        # below is the durable record either way.
+        fail_ci_if_error: false
+      env:
+        # Public repos can rely on tokenless OIDC; private repos need this
+        # secret set in repo settings.  Missing token = step skips silently.
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: upload coverage artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          ${{github.workspace}}/build/coverage.info
+          ${{github.workspace}}/build/coverage-html/
+        retention-days: 30

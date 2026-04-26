@@ -89,6 +89,12 @@ class SimdModule: public Module
 
     virtual void	runInitCode ();
 
+    // Read-only view of every SimdInst owned by this module.  Used by
+    // SimdCoverage::discoverModule to eagerly register all instrumentable
+    // lines at load time, so functions that are never called still appear
+    // as DA:N,0 in the lcov output.
+    const std::vector<SimdInst *> & code () const { return _code; }
+
   private:
 
     SimdInterpreter &		_interpreter;

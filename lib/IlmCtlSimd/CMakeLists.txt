@@ -38,6 +38,7 @@ set(SOURCES
 	CtlSimdAddr.cpp
 	CtlSimdDebugger.cpp
 	CtlSimdArena.cpp
+	CtlSimdCoverage.cpp
 	CtlSimdFunctionCall.cpp
 	CtlSimdHalfExpLog.cpp
 	CtlSimdInspector.cpp
@@ -112,13 +113,19 @@ if(CTL_ENABLE_DEBUGGER)
 	target_compile_definitions(IlmCtlSimd PUBLIC CTL_ENABLE_DEBUGGER=1)
 endif()
 
+if(CTL_ENABLE_COVERAGE)
+	# PUBLIC: downstream targets (unit test, ctltest CLI) include CtlSimdCoverage.h
+	# and need the same macro state as IlmCtlSimd to avoid header ABI skew.
+	target_compile_definitions(IlmCtlSimd PUBLIC CTL_ENABLE_COVERAGE=1)
+endif()
+
 set_target_properties(IlmCtlSimd
 	PROPERTIES
 		VERSION "${CTL_VERSION}"
 		SOVERSION "${CTL_VERSION_MAJOR}.${CTL_VERSION_MINOR}"
 )
 
-install(FILES CtlSimdDebugger.h CtlSimdInspector.h CtlSimdInterpreter.h
+install(FILES CtlSimdCoverage.h CtlSimdDebugger.h CtlSimdInspector.h CtlSimdInterpreter.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CTL)
 
 install(TARGETS IlmCtlSimd DESTINATION ${CMAKE_INSTALL_LIBDIR})

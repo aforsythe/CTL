@@ -3,6 +3,11 @@
 #
 # Adding a test: append a line here and commit. The next CMake configure
 # picks it up and registers it with ctest automatically.
+#
+# NOTE: tests/selftest/coverage_smoke.yaml is intentionally NOT listed here.
+# It is registered by moduletest/CMakeLists.txt under CTL_ENABLE_COVERAGE
+# via a wrapper that runs `ctltest --coverage` and grep-checks the .info.
+# Adding it here would run it redundantly without the --coverage wrapper.
 
 tests/selftest/scalar_roundtrip.yaml
 tests/selftest/sweep_csv.yaml
