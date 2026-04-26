@@ -24,6 +24,23 @@ configure_file(
   COPYONLY
 )
 
+# v1.2 hardening: ut_native.ctl is a TestKit fixture for the ctl_native
+# dispatch tests. Copied next to the binary so InterpRunner::setModulePaths({"."})
+# can resolve "ut_native" alongside "st_scalar".
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ut_native.ctl
+  ${CMAKE_CURRENT_BINARY_DIR}/ut_native.ctl
+  COPYONLY
+)
+
+# Pass the absolute path of the standalone CLI binary into the unit-test
+# binary so subprocess-driven CLI tests can invoke it without relying on
+# install paths. ctltest_unit also needs the cli target built first.
+add_dependencies(ctltest_unit ctltest)
+target_compile_definitions(ctltest_unit PRIVATE
+  CTLTEST_CLI_BINARY="$<TARGET_FILE:ctltest>"
+)
+
 add_test(
   NAME    ctltest::unit
   COMMAND ctltest_unit
