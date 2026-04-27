@@ -3,36 +3,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 ///////////////////////////////////////////////////////////////////////////
 
-//
-// IEEE-754 edge-value tests for the SIMD interpreter.
-//
-// Vector and scalar arithmetic paths must agree bit-exactly on
-// non-finite inputs (NaN, +/-Inf, denormals, signed zero).  Past
-// vectorization rewrites of comparable interpreters have introduced
-// silent regressions like:
-//   - NaN-bit-pattern stripping (e.g. payload bits dropped by a
-//     half<->float round-trip in the SIMD path)
-//   - Comparison results differing under SIMD compare-and-mask vs
-//     scalar branch (any comparison with NaN must be false)
-//   - 0 * Inf reordered into 0 * x where x already had Inf consumed,
-//     producing 0 instead of NaN
-//   - Denormal flush-to-zero on one path but not the other (FTZ/DAZ
-//     register state differs between scalar and SIMD code paths)
-//
-// Strategy: run the same arithmetic through the interpreter with a
-// curated set of input pairs spanning every IEEE-754 special-value
-// combination, then compare against scalar IEEE-754 expected values
-// computed in C++ on the same machine.  A bit-pattern compare
-// detects NaN-payload divergence that == comparison would miss.
-//
-
 #include <CtlSimdInterpreter.h>
 #include <CtlFunctionCall.h>
 #include <testEdgeValues.h>
 #include <testRequire.h>
 
 #include <iostream>
-#include <vector>
 #include <cstring>
 #include <cstdint>
 #include <cmath>
@@ -93,8 +69,6 @@ testArithmetic (SimdInterpreter &interp)
     FunctionArgPtr quotArg = fn->findOutputArg("quot");
     REQUIRE(aArg && bArg && sumArg && diffArg && prodArg && quotArg);
 
-    // Lay out every (a, b) pair from kSpecials across lanes.  N pairs
-    // = kNSpecials * kNSpecials = 100; well below MAX_REG_SIZE (8192).
     const size_t N = static_cast<size_t>(kNSpecials) * kNSpecials;
     float *aData = (float*)(aArg->data());
     float *bData = (float*)(bArg->data());
@@ -126,10 +100,10 @@ testArithmetic (SimdInterpreter &interp)
 	    const float refProd = a * b;
 	    const float refQuot = a / b;
 
-	    // Compare bit-exact, but tolerate the well-known NaN-payload
-	    // difference: hardware NaN canonicalisation may produce a
-	    // different NaN bit pattern than C++ literal NaN.  Both being
-	    // NaN is the IEEE-754 contract; the exact payload is not.
+	    // NaN-payload tolerance: hardware NaN canonicalisation may emit
+	    // a different bit pattern than the literal NaN we computed.
+	    // Both being NaN is the IEEE-754 contract; the exact payload
+	    // is not.
 	    auto check = [&](const char *op, float got, float expect) {
 		if (std::isnan(got) && std::isnan(expect)) return;
 		if (!bitwise_equal(got, expect))
@@ -159,11 +133,6 @@ testMaskedLoopRespectsBranchMask (SimdInterpreter &interp)
     cout << "  masked_loop: lanes branched off via `if(active)` must NOT iterate"
 	 << endl;
 
-    // Lanes with active=false should produce result=0 (loop body never
-    // runs).  Lanes with active=true should produce result=n_in.  A
-    // mutation that makes the loop's per-lane mask track only the
-    // condition (ignoring the surrounding branch mask) would let the
-    // body run for inactive lanes too — caught here.
     FunctionCallPtr fn = interp.newFunctionCall("edge_test::masked_loop");
     FunctionArgPtr nArg      = fn->findInputArg("n_in");
     FunctionArgPtr activeArg = fn->findInputArg("active");
@@ -171,14 +140,12 @@ testMaskedLoopRespectsBranchMask (SimdInterpreter &interp)
     REQUIRE(nArg && activeArg && resArg);
 
     const size_t N = 8;
-    int  *nIn   = (int*) (nArg->data());
-    bool *aIn   = (bool*)(activeArg->data());
-    // Alternating active flag, identical n_in everywhere.  The expected
-    // result follows directly from `active`: 5 or 0.
+    int  *nIn = (int*) (nArg->data());
+    bool *aIn = (bool*)(activeArg->data());
     for (size_t i = 0; i < N; ++i)
     {
 	nIn[i] = 5;
-	aIn[i] = (i % 2 == 0);   // even lanes active, odd lanes filtered out
+	aIn[i] = (i % 2 == 0);
     }
 
     fn->callFunction(N);
@@ -204,13 +171,12 @@ testSeededMaskedLoop (SimdInterpreter &interp)
     cout << "  masked_loop_seeded: condition primed to TRUE for inactive lanes"
 	 << endl;
 
-    // The previous masked_loop test relied on the loop's condition register
-    // being zero for inactive lanes (the natural state from arena init).
-    // The mutation `loopMask[i] = condition[i]` then produced the same
-    // result as `&=` because both gave false for inactive lanes.  This
-    // version primes `keep_going = true` for ALL lanes BEFORE entering
-    // the masked region, so the condition register is true for inactive
-    // lanes — making the mutation observable as a count > 0.
+    // Why: the masked_loop test above relies on inactive lanes' loop
+    // condition being zero (arena-init default), which fails to
+    // discriminate `loopMask &= condition` from `loopMask = condition`.
+    // The .ctl fixture for this test primes the condition to true
+    // BEFORE the outer mask filter, so inactive lanes have a non-zero
+    // condition and the AND-vs-assign distinction becomes observable.
     FunctionCallPtr fn = interp.newFunctionCall("edge_test::masked_loop_seeded");
     FunctionArgPtr aArg    = fn->findInputArg("active");
     FunctionArgPtr seedArg = fn->findInputArg("seed");
@@ -222,8 +188,8 @@ testSeededMaskedLoop (SimdInterpreter &interp)
     int  *seedData = (int*) (seedArg->data());
     for (size_t i = 0; i < N; ++i)
     {
-	aData[i]    = (i % 2 == 0);   // alternate active/inactive
-	seedData[i] = 10;             // every lane primes keep_going=true
+	aData[i]    = (i % 2 == 0);
+	seedData[i] = 10;
     }
 
     fn->callFunction(N);
@@ -249,23 +215,15 @@ testNestedBranchMaskHandling (SimdInterpreter &interp)
     cout << "  nested_branch: outer mask must propagate into inner branch"
 	 << endl;
 
-    // Lanes filtered out by `if (a)` must NOT be touched by the inner
-    // `if (b) ... else ...`.  A SimdBranchInst mutation that constructs
-    // the inner trueMask/falseMask without ANDing the outer mask
-    // would let the inner branch run on those lanes too — observable
-    // because the pre-branch sentinel `r = -1.0` would get overwritten.
     FunctionCallPtr fn = interp.newFunctionCall("edge_test::nested_branch");
     FunctionArgPtr aArg = fn->findInputArg("a");
     FunctionArgPtr bArg = fn->findInputArg("b");
     FunctionArgPtr rArg = fn->findOutputArg("r");
     REQUIRE(aArg && bArg && rArg);
 
-    // Cover all 4 (a, b) combinations:
     const size_t N = 4;
     bool aIn[N] = {true,  false, true,  false};
     bool bIn[N] = {true,  true,  false, false};
-    // Expected:    inner   keep    inner   keep
-    //              true    senti   false   senti
     float expected[N] = {1.0f, -1.0f, 0.0f, -1.0f};
 
     bool *aData = (bool*)(aArg->data());
@@ -298,10 +256,6 @@ testMergedBranchAroundOuterMask (SimdInterpreter &interp)
     cout << "  merge_branch: branch-as-expression must respect outer mask"
 	 << endl;
 
-    // merge_inner is an if-expression that returns 7 or 9.  Wrapping it
-    // in an outer `if (a)` means the merge runs only for lanes where
-    // a=true.  Lanes where a=false must keep r = -1.0 from the pre-
-    // branch initialisation.
     FunctionCallPtr fn = interp.newFunctionCall("edge_test::merge_branch");
     FunctionArgPtr aArg = fn->findInputArg("a");
     FunctionArgPtr bArg = fn->findInputArg("b");

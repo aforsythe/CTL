@@ -1,33 +1,14 @@
 #!/usr/bin/env python3
-"""Mutation testing harness for the SIMD register / interpreter code.
+"""Apply each mutation in MUTATIONS, incrementally rebuild + run tests,
+report survivors (mutations no test caught).
 
-For each mutation in a hand-curated list, apply it to the source,
-incrementally rebuild ONE target, run the test suite, and record
-whether any test caught the mutation.  Survivors (mutations no test
-caught) indicate gaps in the test suite — they're places where the
-implementation could silently regress and CI would not notice.
-
-This is INTENTIONALLY targeted, not exhaustive.  Real exhaustive
-mutation testing (every binary operator, every constant, every
-branch) would require building tens of thousands of variants which
-is not practical for an interactive QA tool.  The mutations here are
-chosen to:
-
-  - Land in code paths the test suite actually exercises (verified
-    via llvm-cov beforehand)
-  - Test specific invariants we care about (lane addressing, ref
-    counting, ownership transitions)
-  - Be syntactically valid after substitution (no compile-failure
-    spam)
+Mutations are hand-curated, not generated, so the set is small and
+each entry can target a specific invariant.
 
 Usage:
     tools/mutation_test_simd.py --build-dir /path/to/build [--test-filter REGEX]
 
-Builds incrementally per mutation (only the mutated translation unit
-+ link), so the per-iteration cost is ~10-30s on cpu-perf.
-
-Exits 0 if every mutation was caught (every test failed for at least
-one mutation), 1 if any survived (no test caught the change).
+Exits 0 if every mutation was caught, 1 if any survived.
 """
 
 from __future__ import annotations
@@ -53,17 +34,8 @@ class Mutation:
     target: str          # cmake target to (re)build before running tests
 
 
-# Targeted mutations.  Each one changes one line in cpu-perf SIMD code
-# in a way that should make at least one test fail.  Picked to cover:
-#   - SimdReg setVarying lane[0] preservation
-#   - SimdReg operator[] varying-vs-uniform offset arithmetic
-#   - SimdReg arena ownership flag
-#   - SimdBoolMask varying transition
-#   - SimdInst arithmetic opcode behaviour (one representative)
-#   - SimdInterpreter maxSamples reporting
-#
-# The `pattern` MUST uniquely match its target line; the harness will
-# refuse to apply a mutation that matches multiple lines.
+# Each `pattern` MUST uniquely match a single line in `file`; the
+# harness aborts a mutation whose pattern matches 0 or >1 times.
 MUTATIONS: list[Mutation] = [
     # ---------------------------------------------------------------
     # Group A: SimdReg / SimdBoolMask register-class invariants
