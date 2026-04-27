@@ -4,6 +4,7 @@ set(SOURCES
 	testCppCall.cpp
 	testEndOfLine.cpp
 	testExamples.cpp
+	testExc.cpp
 	testHugeInit.cpp
 	testParser.cpp
 	testSimdRegAddr.cpp

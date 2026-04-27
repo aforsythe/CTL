@@ -57,6 +57,7 @@
 #include <testParser.h>
 #include <testConcurrentCalls.h>
 #include <testCppCall.h>
+#include <testExc.h>
 #include <testSimdRegAddr.h>
 #include <testUniformBoolDefault.h>
 #include <testVarying.h>
@@ -77,6 +78,7 @@ main (int argc, char *argv[])
 
     TEST (testEndOfLine);
     TEST (testParser);
+    TEST (testExc);
     TEST (testSimdRegAddr);
     TEST (testConcurrentCalls);
     TEST (testUniformBoolDefault);
