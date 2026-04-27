@@ -59,6 +59,7 @@
 //-----------------------------------------------------------------------------
 
 #include <CtlModule.h>
+#include <CtlSymbolTable.h>
 
 using namespace std;
 
@@ -76,6 +77,28 @@ Module::Module (const string &name, const string &fileName):
 Module::~Module ()
 {
     // empty
+}
+
+
+void
+Module::captureLocalSymbols (const SymbolTable &symtab)
+{
+    _localSymbols.clear();
+
+    for (SymbolTable::SymbolMap::const_iterator it = symtab.begin();
+         it != symtab.end(); ++it)
+    {
+        const SymbolInfoPtr &info = it->second;
+        if (!info) continue;
+        if (info->module() != this) continue;
+
+        // A symbol is "local" if its absolute name contains more than one "::".
+        // (Same predicate as SymbolTable::deleteAllLocalSymbols.)
+        const string &absName = it->first;
+        if (absName.find ("::") == absName.rfind ("::")) continue;
+
+        _localSymbols.push_back ({absName, info});
+    }
 }
 
 

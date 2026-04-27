@@ -189,6 +189,13 @@ Interpreter::symtab ()
 }
 
 
+ModuleSet &
+Interpreter::moduleSet () const
+{
+    return const_cast<Interpreter *>(this)->_data->moduleSet;
+}
+
+
 vector<string>
 Interpreter::modulePaths()
 {
@@ -384,6 +391,7 @@ void Interpreter::_loadModule(const std::string &moduleName,
 
 	debug ("\tcleanup");
 	delete lcontext;
+	module->captureLocalSymbols (_data->symtab);
 	_data->symtab.deleteAllLocalSymbols (module);
     }
     catch (...)

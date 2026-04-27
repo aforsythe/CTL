@@ -175,9 +175,12 @@ class SimdCallInst: public SimdInst
 
     SimdCallInst (const SimdInst *callPath,
 		  int numParameters,
-		  int lineNumber);
+		  int lineNumber,
+		  const std::string &functionName = std::string());
 
     void		setCallPath (const SimdInst *callPath);
+
+    const std::string &	name () const { return _functionName; }
 
     virtual void	execute (SimdBoolMask &mask,
 				 SimdXContext &xcontext) const;
@@ -188,6 +191,7 @@ class SimdCallInst: public SimdInst
 
     const SimdInst *	_callPath;
     int                 _numParameters;
+    std::string         _functionName;
 };
 
 

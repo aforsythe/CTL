@@ -59,6 +59,8 @@
 //-----------------------------------------------------------------------------
 
 #include <CtlSimdInst.h>
+#include <CtlSimdDebugger.h>
+#include <CtlSimdInterpreter.h>
 #include <sstream>
 
 using namespace std;
@@ -183,6 +185,13 @@ SimdInst::executePath (SimdBoolMask &mask, SimdXContext &xcontext) const
 	debug_only(cout << "fp=" << xcontext.stack().fp()
 		   << " sp=" << xcontext.stack().sp() << " ");
 	debug_only(inst->print(0));
+
+#ifdef CTL_ENABLE_DEBUGGER
+	if (Ctl::SimdDebugger *dbg = xcontext.interpreter().debugger())
+	{
+	    dbg->beforeInst (xcontext, inst, xcontext.callDepth());
+	}
+#endif
 
 	try
 	{
@@ -462,9 +471,11 @@ SimdLoopInst::print (int indent) const
 
 SimdCallInst::SimdCallInst (const SimdInst *callPath,
 			    int numParameters,
-			    int lineNumber)
+			    int lineNumber,
+			    const std::string &functionName)
     : SimdInst(&simdExecThunk<SimdCallInst>, lineNumber),
-      _callPath (callPath), _numParameters(numParameters)
+      _callPath (callPath), _numParameters(numParameters),
+      _functionName(functionName)
 {
     // empty
 }
@@ -477,15 +488,38 @@ SimdCallInst::setCallPath (const SimdInst *callPath)
 }
 
 
-void	
+void
 SimdCallInst::execute (SimdBoolMask &mask, SimdXContext &xcontext) const
 {
     {
 	StackFrame stackFrame (xcontext);
 	SimdBoolMask callMask(mask, xcontext.regSize());
-	if( 0 != _callPath ) 
+	if( 0 != _callPath )
 	{
+#ifdef CTL_ENABLE_DEBUGGER
+	    {
+		Ctl::SimdDebugger *dbg = xcontext.interpreter().debugger();
+		const std::string callerFile = xcontext.fileName();
+		const int callerLine = xcontext.lineNumber();
+		if (dbg) dbg->onCallEnter (name(), callerFile, callerLine);
+		struct PopOnExit {
+		    SimdXContext &xc;
+		    Ctl::SimdDebugger *dbg;
+		    const std::string fn;
+		    explicit PopOnExit (SimdXContext &x, Ctl::SimdDebugger *d,
+					const std::string &name)
+			: xc(x), dbg(d), fn(name) { xc.pushCallDepth(); }
+		    ~PopOnExit ()
+		    {
+			xc.popCallDepth();
+			if (dbg) dbg->onCallExit (fn);
+		    }
+		} popOnExit (xcontext, dbg, name());
 		_callPath->executePath (callMask, xcontext);
+	    }
+#else
+	    _callPath->executePath (callMask, xcontext);
+#endif
 	}
 	else
 	{

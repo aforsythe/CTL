@@ -243,6 +243,13 @@ class Parser
 
     StatementNodePtr    _firstConst;
     StatementNodePtr    _lastConst;
+
+    // Qualified name of the function whose body is currently being parsed
+    // (e.g. "helper::clamp01").  Empty outside any function definition.
+    // Used to stamp SymbolInfo::owningFunction so the debugger can filter
+    // Locals to just the active frame.  CTL doesn't allow nested function
+    // definitions, so a single string suffices (no stack needed).
+    std::string         _currentFunction;
 };
 
 

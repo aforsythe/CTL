@@ -84,7 +84,8 @@ struct SimdInterpreter::Data
 
 SimdInterpreter::SimdInterpreter():
     Interpreter(),
-    _data (new Data)
+    _data (new Data),
+    _debugger (nullptr)
 {
     _data->maxInstCount = 100000000;
     _data->abortCount = 0;
@@ -104,6 +105,13 @@ SimdInterpreter::SimdInterpreter():
 SimdInterpreter::~SimdInterpreter()
 {
     delete _data;
+}
+
+
+void
+SimdInterpreter::setDebugger (Ctl::SimdDebugger *dbg)
+{
+    _debugger = dbg;
 }
 
 
@@ -137,11 +145,18 @@ SimdInterpreter::abortCount()
 }
 
 
-unsigned long	
+unsigned long
 SimdInterpreter::maxInstCount()
 {
     std::lock_guard<std::mutex> lock(_data->mutex);
     return _data->maxInstCount;
+}
+
+
+SymbolTable &
+SimdInterpreter::symbolTable() const
+{
+    return const_cast<SimdInterpreter *>(this)->symtab();
 }
 
 

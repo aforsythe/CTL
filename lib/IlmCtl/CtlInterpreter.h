@@ -64,6 +64,7 @@
 //-----------------------------------------------------------------------------
 
 #include <CtlFunctionCall.h>
+#include <CtlModuleSet.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -118,6 +119,15 @@ class Interpreter
     //----------------------------------------------------------
 
     virtual size_t	maxSamples () const = 0;
+
+
+    //-------------------------------------------------------------------
+    // Public access to the interpreter's module set.  Exposed so that
+    // the debugger inspector can walk per-module local symbol snapshots
+    // captured by captureLocalSymbols() before deleteAllLocalSymbols().
+    //-------------------------------------------------------------------
+
+    ModuleSet &		moduleSet () const;
 
 
     //---------------------------------------------------------------------

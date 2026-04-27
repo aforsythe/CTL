@@ -1,0 +1,10 @@
+Breakpoint set at run_chain_a.ctl:4
+Breakpoint set at run_chain_b.ctl:4
+* Stopped at run_chain_a.ctl:4 in ca::main()
+(ctldb) rIn = 5
+(ctldb) → stage 1 of 2: rOut=10
+* Stopped at run_chain_b.ctl:4 in cb::main()
+(ctldb) rIn = 10
+(ctldb) → stage 2 of 2: rOut=110
+* function returned
+  rOut = 110

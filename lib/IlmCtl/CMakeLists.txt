@@ -26,6 +26,13 @@ target_include_directories(IlmCtl
 		${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Mirror IlmCtlSimd's CTL_ENABLE_DEBUGGER define into the parser layer
+# too: the parser must conditionally suppress constant-folding so that
+# debugger steps land on the call-site line rather than the const decl.
+if(CTL_ENABLE_DEBUGGER)
+    target_compile_definitions(IlmCtl PUBLIC CTL_ENABLE_DEBUGGER=1)
+endif()
+
 target_link_libraries (IlmCtl
     PRIVATE
         # For OpenEXR/Imath 3.x:

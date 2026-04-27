@@ -36,9 +36,11 @@
 
 set(SOURCES
 	CtlSimdAddr.cpp
+	CtlSimdDebugger.cpp
 	CtlSimdArena.cpp
 	CtlSimdFunctionCall.cpp
 	CtlSimdHalfExpLog.cpp
+	CtlSimdInspector.cpp
 	CtlSimdInst.cpp
 	CtlSimdInterpreter.cpp
 	CtlSimdLContext.cpp
@@ -103,12 +105,20 @@ if(CTL_USE_SLEEF)
 	endif()
 endif()
 
+if(CTL_ENABLE_DEBUGGER)
+	# PUBLIC: downstream targets (ctldb, ctldap, unit test) include
+	# CtlSimdDebugger.h and need the same macro state as IlmCtlSimd to
+	# avoid header ABI skew (NoopDebugger vtable depends on the macro).
+	target_compile_definitions(IlmCtlSimd PUBLIC CTL_ENABLE_DEBUGGER=1)
+endif()
+
 set_target_properties(IlmCtlSimd
 	PROPERTIES
 		VERSION "${CTL_VERSION}"
 		SOVERSION "${CTL_VERSION_MAJOR}.${CTL_VERSION_MINOR}"
 )
 
-install(FILES CtlSimdInterpreter.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CTL)
+install(FILES CtlSimdDebugger.h CtlSimdInspector.h CtlSimdInterpreter.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CTL)
 
 install(TARGETS IlmCtlSimd DESTINATION ${CMAKE_INSTALL_LIBDIR})

@@ -59,6 +59,7 @@
 #include <testParser.h>
 #include <testConcurrentCalls.h>
 #include <testCppCall.h>
+#include <testDebugger.h>
 #include <testExc.h>
 #include <testSimdRegAddr.h>
 #include <testSimdRegOwnership.h>
@@ -92,6 +93,7 @@ main (int argc, char *argv[])
     TEST (testVaryingArrayIndex);
     TEST (testExamples);
     TEST (testCppCall);
+    TEST (testDebugger);
     TEST (testVarying);
     TEST (testVaryingReturn);
     TEST (testVaryingLookup);

@@ -1090,7 +1090,39 @@ NameNode::evaluate (LContext &lcontext)
 	if(valueNode)
 	    info->value()->evaluate (lcontext);
 	else
-	    return info->value()->evaluate (lcontext);
+	{
+	    ExprNodePtr folded = info->value()->evaluate (lcontext);
+#ifdef CTL_ENABLE_DEBUGGER
+	    // Constant-folding replaces the call-site NameNode with the
+	    // const's underlying LiteralNode.  That literal carries the
+	    // const's DECLARATION line, so per-line debugger stepping
+	    // jumps back to the top of the file when execution touches
+	    // the folded value.  Compile-time uses (array sizing, type
+	    // checking) still need the folded value, so we keep folding
+	    // — but clone the result with this NameNode's lineNumber so
+	    // the debugger sees the call-site line instead.  (Literal-
+	    // Node::evaluate returns `this`, so the cloned literal would
+	    // otherwise be shared and mutating its line corrupts other
+	    // references.)
+	    if (folded)
+	    {
+		if (BoolLiteralNodePtr l = folded.cast<BoolLiteralNode>())
+		    return lcontext.newBoolLiteralNode (lineNumber, l->value);
+		if (FloatLiteralNodePtr l = folded.cast<FloatLiteralNode>())
+		    return lcontext.newFloatLiteralNode (lineNumber, l->value);
+		if (IntLiteralNodePtr l = folded.cast<IntLiteralNode>())
+		    return lcontext.newIntLiteralNode (lineNumber, l->value);
+		if (UIntLiteralNodePtr l = folded.cast<UIntLiteralNode>())
+		    return lcontext.newUIntLiteralNode (lineNumber, l->value);
+		if (HalfLiteralNodePtr l = folded.cast<HalfLiteralNode>())
+		    return lcontext.newHalfLiteralNode (lineNumber, l->value);
+		// String literals etc. — fall through to the original folded
+		// node (its line is the const decl, but const strings
+		// aren't a debugger-stepping concern in practice).
+	    }
+#endif
+	    return folded;
+	}
     }
     return this;
 }

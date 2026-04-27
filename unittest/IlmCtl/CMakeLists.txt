@@ -2,6 +2,7 @@ set(SOURCES
 	main.cpp
 	testConcurrentCalls.cpp
 	testCppCall.cpp
+	testDebugger.cpp
 	testEdgeValues.cpp
 	testEndOfLine.cpp
 	testExamples.cpp

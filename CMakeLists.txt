@@ -181,6 +181,22 @@ if(NOT CTL_SANITIZER STREQUAL "OFF")
   add_link_options(${_san_flag})
 endif()
 
+#
+# Single-pixel debugger for CTL modules.  When ON, the SIMD interpreter's
+# dispatch loop consults a SimdDebugger callback at every executed
+# instruction, enabling breakpoints, stepping, and variable inspection
+# from the ctldb CLI and the ctldap DAP server.  OFF by default so normal
+# builds pay zero cost (the dispatch hook is preprocessor-elided when this
+# macro is undefined).
+#
+option(CTL_ENABLE_DEBUGGER
+    "Build IlmCtlSimd with single-pixel debugger hooks. Enables the ctldb CLI and ctldap DAP server; intended for development and debugging only (adds a per-instruction null-check to the hot dispatch loop)."
+    OFF)
+
+if(CTL_ENABLE_DEBUGGER)
+    message(STATUS "CTL debugger hooks: ENABLED")
+endif()
+
 # Profile-guided optimization (clang -fprofile-generate / -fprofile-use).
 # Four-state knob: AUTO, OFF, GENERATE, USE.
 #
@@ -441,3 +457,7 @@ if (CTL_BUILD_TESTS)
   add_subdirectory(unittest)
 endif()
 
+if(CTL_ENABLE_DEBUGGER)
+  add_subdirectory(ctldb)
+  add_subdirectory(ctldap)
+endif()

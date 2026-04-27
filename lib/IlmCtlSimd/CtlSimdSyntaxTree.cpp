@@ -1332,9 +1332,10 @@ SimdCallNode::generateCode (LContext &lcontext)
 	// Called function is CTL code, address is known.
 	//
 
-	slcontext.addInst (new SimdCallInst (addr->inst(), 
-					     numParameters, 
-					     lineNumber));
+	slcontext.addInst (new SimdCallInst (addr->inst(),
+					     numParameters,
+					     lineNumber,
+					     function->name));
     }
     else
     {
@@ -1346,7 +1347,8 @@ SimdCallNode::generateCode (LContext &lcontext)
 	// function (see SimdModuleNode::generateCode()).
 	//
 
-	SimdCallInst *inst = new SimdCallInst(0, numParameters, lineNumber);
+	SimdCallInst *inst = new SimdCallInst(0, numParameters, lineNumber,
+					      function->name);
 	slcontext.addInst (inst);
 	slcontext.mustFixCall (inst, info);
     }

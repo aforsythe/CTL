@@ -62,9 +62,16 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <CtlRcPtr.h>
+
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Ctl {
+
+class SymbolInfo;
+class SymbolTable;
 
 
 class Module
@@ -78,6 +85,24 @@ class Module
 
     virtual void		runInitCode () = 0;
 
+    //------------------------------------------------------------------
+    // Snapshot of function-local symbols.
+    //
+    // captureLocalSymbols() must be called BEFORE deleteAllLocalSymbols()
+    // in Interpreter::_loadModule.  It walks the symbol table and copies
+    // every symbol that belongs to this module AND lives in a nested
+    // (local) namespace — i.e. whose absolute name contains more than
+    // one "::" separator — into _localSymbols.
+    //
+    // localSymbols() returns that snapshot so that inspectVariables()
+    // can resolve locals by name during a debugger pause.
+    //------------------------------------------------------------------
+
+    void captureLocalSymbols (const SymbolTable &symtab);
+
+    typedef std::vector<std::pair<std::string, RcPtr<SymbolInfo>>> LocalSymbolList;
+    const LocalSymbolList & localSymbols () const { return _localSymbols; }
+
   protected:
 
     Module (const std::string &name,
@@ -87,6 +112,7 @@ class Module
 
     std::string			_name;
     std::string			_fileName;
+    LocalSymbolList		_localSymbols;
 };
 
 

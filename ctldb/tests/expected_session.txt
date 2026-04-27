@@ -1,0 +1,10 @@
+Breakpoint set at run_session.ctl:13
+* Stopped at run_session.ctl:13 in ctldb_test::main()
+(ctldb) rIn = 2
+(ctldb) * Stopped at run_session.ctl:4 in helper()
+(ctldb) #0 helper  (called from run_session.ctl:13)
+#1 ctldb_test::main  (called from unknown:0)
+(ctldb) * Stopped at run_session.ctl:14 in ctldb_test::main()
+(ctldb) postHelper = 3.25
+(ctldb) * function returned
+  rOut = 6.5

@@ -87,7 +87,7 @@ class ModuleSet
     // addModule() deletes the new module and throws an exception
     // instead of adding the new module to the set.
     //----------------------------------------------------------------
-    
+
     void	addModule (Module *module);
 
 
@@ -104,8 +104,15 @@ class ModuleSet
 
     bool	containsModule (const std::string &name) const;
 
-  private:
-    
+
+    //-------------------------------------------------------
+    // Read-only iteration over every Module* in the set.
+    // Used by the debugger inspector to walk per-module local
+    // symbol snapshots.  The value_type is
+    //   std::pair<const std::string * const, Module *>
+    // so dereference with it->second to get the Module*.
+    //-------------------------------------------------------
+
     struct Compare
     {
 	bool operator() (const std::string *a, const std::string *b) const
@@ -115,6 +122,11 @@ class ModuleSet
     };
 
     typedef std::map <const std::string *, Module *, Compare> ModuleMap;
+    typedef ModuleMap::const_iterator const_iterator;
+    const_iterator begin () const { return _modules.begin(); }
+    const_iterator end   () const { return _modules.end();   }
+
+  private:
 
     ModuleMap	_modules;
 };

@@ -65,6 +65,7 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <cassert>
 #include <vector>
 #include <CtlSimdModule.h>
 #include <typeinfo>
@@ -165,6 +166,14 @@ class SimdXContext
 
     SimdInterpreter &interpreter(void) const { return _interpreter; };
 
+    std::size_t callDepth () const { return _callDepth; }
+    void        pushCallDepth ()   { ++_callDepth; }
+    void        popCallDepth ()
+                {
+                    assert (_callDepth > 0);
+                    --_callDepth;
+                }
+
   private:
 
     SimdInterpreter &	_interpreter;
@@ -181,6 +190,7 @@ class SimdXContext
     unsigned long	_maxInstCount;
     unsigned long	_instCount;
     std::string		_fileName;
+    std::size_t		_callDepth = 0;
 };
 
 

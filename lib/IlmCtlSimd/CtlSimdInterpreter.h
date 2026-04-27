@@ -65,6 +65,7 @@
 //-----------------------------------------------------------------------------
 
 #include <CtlInterpreter.h>
+#include <CtlSimdDebugger.h>
 
 namespace Ctl {
 
@@ -75,6 +76,9 @@ class SimdInterpreter: public Interpreter
     SimdInterpreter ();
     virtual ~SimdInterpreter ();
 
+    void                  setDebugger (Ctl::SimdDebugger *dbg);
+    Ctl::SimdDebugger *   debugger ()    const { return _debugger; }
+
     virtual size_t		maxSamples () const;
 
     virtual void		setMaxInstCount (unsigned long count);
@@ -82,6 +86,13 @@ class SimdInterpreter: public Interpreter
 
     unsigned long		abortCount();
     unsigned long		maxInstCount();
+
+    //-------------------------------------------------------------------
+    // Public access to the symbol table.  Exposed so the debugger
+    // inspector can walk module-scope and per-module local symbols.
+    //-------------------------------------------------------------------
+
+    SymbolTable &		symbolTable() const;
 
   private:
 
@@ -101,6 +112,7 @@ class SimdInterpreter: public Interpreter
     class Data;
 
     Data *			_data;
+    Ctl::SimdDebugger *		_debugger;     // not owned; nullptr means use NoopDebugger
 };
 
 

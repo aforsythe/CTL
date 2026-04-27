@@ -64,6 +64,7 @@
 #include <CtlSymbolTable.h>
 #include <assert.h>
 #include <CtlSimdInterpreter.h>
+#include <CtlSimdDebugger.h>
 
 using namespace std;
 using namespace Iex;
@@ -140,12 +141,36 @@ SimdFunctionCall::SimdFunctionCall
 }
 
 
-void	
+void
 SimdFunctionCall::callFunction (size_t numSamples)
 {
     StackFrame stackFrame (_xcontext);
 
+    _xcontext.pushCallDepth();
+    struct PopOnExit {
+	SimdXContext &x;
+	~PopOnExit() { x.popCallDepth(); }
+    } popOnExit{_xcontext};
+
+#ifdef CTL_ENABLE_DEBUGGER
+    {
+        Ctl::SimdDebugger *dbg = _xcontext.interpreter().debugger();
+        if (dbg)
+        {
+            const std::string callerFile = _xcontext.fileName();
+            const int callerLine = _xcontext.lineNumber();
+            dbg->onCallEnter (name(), callerFile, callerLine);
+        }
+        struct CallExitGuard {
+            Ctl::SimdDebugger *dbg;
+            std::string fn;
+            ~CallExitGuard() { if (dbg) dbg->onCallExit (fn); }
+        } callExitGuard{dbg, name()};
+        _xcontext.run (numSamples, _entryPoint);
+    }
+#else
     _xcontext.run (numSamples, _entryPoint);
+#endif
 
     {
 	const SimdFunctionArgPtr arg = returnValue();

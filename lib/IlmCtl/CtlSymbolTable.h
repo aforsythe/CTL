@@ -177,6 +177,38 @@ class SymbolInfo: public RcObject
 
     void			print (int indent) const;
 
+    //----------------------------------------------------------------
+    // Source line where the variable / parameter was declared.
+    // -1 if unknown (e.g. compiler-synthesized symbols, type names).
+    // Used by the debugger to hide locals that haven't been declared
+    // yet at the current pause line.
+    //----------------------------------------------------------------
+
+    int				declarationLine () const { return _declarationLine; }
+    void			setDeclarationLine (int line) { _declarationLine = line; }
+
+    //----------------------------------------------------------------
+    // Qualified name of the function that owns this symbol (for
+    // function-local variables and parameters), e.g. "helper::clamp01".
+    // Empty for globals / module-scope symbols.  Used by the debugger
+    // to filter Locals to just the active frame's symbols (the
+    // fp-relative bounds check alone leaks neighbour-frame data).
+    //----------------------------------------------------------------
+
+    const std::string &		owningFunction () const { return _owningFunction; }
+    void			setOwningFunction (const std::string &fn) { _owningFunction = fn; }
+
+    //----------------------------------------------------------------
+    // True for function parameters (input + output).  Exempts them
+    // from the "hide locals declared at/after the current line"
+    // filter the debugger applies — params are inputs and should be
+    // visible from function entry, even when execution is paused on
+    // the function-signature line itself.
+    //----------------------------------------------------------------
+
+    bool			isParameter () const { return _isParameter; }
+    void			setIsParameter (bool b) { _isParameter = b; }
+
   private:
 
     const Module *	_module;
@@ -186,6 +218,9 @@ class SymbolInfo: public RcObject
     bool                _isTypeName;
 
     ReadWriteAccess     _access;
+    int                 _declarationLine = -1;
+    std::string         _owningFunction;
+    bool                _isParameter     = false;
 };
 
 typedef RcPtr<SymbolInfo> SymbolInfoPtr;
@@ -269,9 +304,19 @@ class SymbolTable
     void		deleteAllLocalSymbols (const Module *module);
 
 
-  private:
+    //--------------------------------------------------------
+    // Read-only iteration over every (absolute name, SymbolInfo)
+    // pair.  Used by the debugger inspector to walk module-scope
+    // and per-module captured locals.
+    //--------------------------------------------------------
 
     typedef std::map <std::string, SymbolInfoPtr> SymbolMap;
+    SymbolMap::const_iterator begin () const { return _symbols.begin(); }
+    SymbolMap::const_iterator end   () const { return _symbols.end();   }
+
+
+  private:
+
     typedef std::vector <std::string> StringStack;
 
     SymbolMap		_symbols;

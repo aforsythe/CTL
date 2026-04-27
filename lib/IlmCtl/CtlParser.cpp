@@ -383,6 +383,29 @@ Parser::parseFunction ()
     if (!symtab().defineSymbol (name, info))
 	duplicateName (name, lineNumber, fileName());
 
+    // Track the qualifying function name (must be captured BEFORE the
+    // LocalNamespace push below, otherwise getAbsoluteName splices the
+    // freshly-pushed N<n> in: we want "demo::main", not "demo::N3::main").
+    // Stamped onto each variable/parameter SymbolInfo inside this body
+    // so the debugger can filter Locals to just the active frame.  CTL
+    // forbids nested function definitions, but save/restore makes the
+    // lifetime obvious.
+    //
+    // Normalize to MATCH the name the runtime uses when announcing a
+    // call (SimdFunctionCall::callFunction → onCallEnter passes the
+    // function-call name verbatim).  When the source has no namespace
+    // wrapper, getAbsoluteName produces "::main" (leading "::" on an
+    // empty globalNs), but the runtime call site uses bare "main".
+    // Matching the runtime form here keeps the debugger filter sane.
+    std::string savedFn = _currentFunction;
+    {
+        const std::string &gns = symtab().getGlobalNamespace();
+        if (gns.empty()) _currentFunction = name;
+        else             _currentFunction = gns + "::" + name;
+    }
+    struct RestoreFn { std::string &slot, prev; ~RestoreFn(){ slot = prev; } };
+    RestoreFn restore { _currentFunction, savedFn };
+
     //
     // Create a local name space for the function's parameter list and body.
     // Start a new stack frame layout for this function.
@@ -413,9 +436,10 @@ Parser::parseFunction ()
 
     AddrPtr returnAddr = _lcontext.returnValueAddr (returnType);
 
-    symtab().defineSymbol
-	("$return", new SymbolInfo 
-                       (module(), RWA_WRITE, false, returnType, returnAddr));
+    SymbolInfoPtr returnInfo =
+	new SymbolInfo (module(), RWA_WRITE, false, returnType, returnAddr);
+    returnInfo->setOwningFunction (_currentFunction);
+    symtab().defineSymbol ("$return", returnInfo);
 
     //
     // Parse the function's body.
@@ -690,9 +714,12 @@ Parser::parseParameter (ParamVector &parameters,
 
 	AddrPtr paramAddr = _lcontext.parameterAddr (paramType);
 
-	if (!symtab().defineSymbol
-	      (name, new SymbolInfo (module(), access, false, 
-				     paramType, paramAddr)))
+	SymbolInfoPtr paramInfo =
+	    new SymbolInfo (module(), access, false, paramType, paramAddr);
+	paramInfo->setDeclarationLine (currentLineNumber());
+	paramInfo->setOwningFunction (_currentFunction);
+	paramInfo->setIsParameter (true);
+	if (!symtab().defineSymbol (name, paramInfo))
 	{
 	    duplicateName (name, currentLineNumber(), fileName());
 	}
@@ -1514,6 +1541,12 @@ Parser::parseReturnStatement()
     //
 
     match (TK_RETURN);
+    // Capture the line of the `return` keyword BEFORE advancing past the
+    // statement.  Using currentLineNumber() at the end of the function
+    // would land on the line AFTER the trailing `;`, which causes the
+    // debugger's per-line step to bounce to the closing `}` of the
+    // enclosing block before showing the return body.
+    int returnKeywordLine = currentLineNumber();
     next();
 
     ExprNodePtr returnedValue = 0;
@@ -1571,7 +1604,7 @@ Parser::parseReturnStatement()
     // Create a syntax tree node for the return statement.
     //
 
-    return _lcontext.newReturnNode (currentLineNumber(), info, returnedValue);
+    return _lcontext.newReturnNode (returnKeywordLine, info, returnedValue);
 }
 
 
@@ -2494,6 +2527,8 @@ Parser::variableDefinitionNoInit
 
     SymbolInfoPtr info =
 	new SymbolInfo (module(), RWA_READWRITE, false, type, addr);
+    info->setDeclarationLine (lineNumber);
+    info->setOwningFunction (_currentFunction);
 
     if (!symtab().defineSymbol (name, info))
 	duplicateName (name, lineNumber, fileName());
@@ -2557,9 +2592,11 @@ Parser::variableDefinitionCurlyBraces
     else
 	addr = _lcontext.autoVariableAddr (type);
 
-    SymbolInfoPtr info = new SymbolInfo (module(), 
-					 isConst? RWA_READ: RWA_READWRITE, 
+    SymbolInfoPtr info = new SymbolInfo (module(),
+					 isConst? RWA_READ: RWA_READWRITE,
 					 false, type, addr);
+    info->setDeclarationLine (lineNumber);
+    info->setOwningFunction (_currentFunction);
     if (constValue)
 	info->setValue (constValue);
 
@@ -2625,9 +2662,11 @@ Parser::variableDefinitionImport
     else
 	addr = _lcontext.autoVariableAddr (type);
 
-    SymbolInfoPtr info = new SymbolInfo (module(), 
-					 isConst? RWA_READ: RWA_READWRITE, 
+    SymbolInfoPtr info = new SymbolInfo (module(),
+					 isConst? RWA_READ: RWA_READWRITE,
 					 false, type, addr);
+    info->setDeclarationLine (lineNumber);
+    info->setOwningFunction (_currentFunction);
     if (constValue)
 	info->setValue (constValue);
 
@@ -2776,9 +2815,11 @@ Parser::variableDefinitionAssignExpr
     else
 	addr = _lcontext.autoVariableAddr (type);
 
-    SymbolInfoPtr info = new SymbolInfo (module(), 
-					 isConst? RWA_READ: RWA_READWRITE, 
+    SymbolInfoPtr info = new SymbolInfo (module(),
+					 isConst? RWA_READ: RWA_READWRITE,
 					 false, type, addr);
+    info->setDeclarationLine (lineNumber);
+    info->setOwningFunction (_currentFunction);
     if (constValue)
 	info->setValue (constValue);
 
@@ -2842,9 +2883,11 @@ Parser::variableDefinitionExprSideEffect
     else
 	addr = _lcontext.autoVariableAddr (type);
 
-    SymbolInfoPtr info = new SymbolInfo (module(), 
-					 isConst? RWA_READ: RWA_READWRITE, 
+    SymbolInfoPtr info = new SymbolInfo (module(),
+					 isConst? RWA_READ: RWA_READWRITE,
 					 false, type, addr);
+    info->setDeclarationLine (lineNumber);
+    info->setOwningFunction (_currentFunction);
 
     if (!symtab().defineSymbol (name, info))
 	duplicateName (name, lineNumber, fileName());
