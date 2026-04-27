@@ -65,6 +65,10 @@ class Mutation:
 # The `pattern` MUST uniquely match its target line; the harness will
 # refuse to apply a mutation that matches multiple lines.
 MUTATIONS: list[Mutation] = [
+    # ---------------------------------------------------------------
+    # Group A: SimdReg / SimdBoolMask register-class invariants
+    # ---------------------------------------------------------------
+
     # SimdBoolMask::setVarying widening: memset broadcasts inline value across
     # all lanes.  Mutate the broadcast value to a constant 0 — testSimdRegAddr
     # checks lane[i] == seed after widen.
@@ -75,21 +79,9 @@ MUTATIONS: list[Mutation] = [
         description="SimdBoolMask widen: broadcast 0 instead of inline value",
         target="IlmCtlTest",
     ),
-    # SimdReg::reference: when _dataOwned is true, the assignment delete[]s
-    # the old data before reassignment.  Skip the delete -> leak.  The smoke
-    # tests won't notice (no heap accounting), but a heap-instrumented build
-    # (ASan) would.  Expected to SURVIVE under plain unit tests — illustrates
-    # an inherent limit of unit-test-driven mutation testing.
-    Mutation(
-        file="lib/IlmCtlSimd/CtlSimdReg.cpp",
-        pattern=r"if \(_dataOwned\)\n\tdelete \[\] _data;\n\n    //",
-        replacement="if (_dataOwned)\n\t{ /* leak: _data; */ }\n\n    //",
-        description="reference(): leak _data instead of deleting (ASan-only catch)",
-        target="IlmCtlTest",
-    ),
-    # SimdReg::setVarying narrow: should preserve _data[0] in _inlineData.
-    # Mutate to preserve _data[1] instead — testSimdRegAddr asserts lane[0]
-    # is preserved across narrow.
+    # SimdBoolMask::setVarying narrow: should preserve _data[0] in
+    # _inlineData.  Mutate to preserve _data[1] — testSimdRegAddr's
+    # strengthened lane-discrimination check pins this.
     Mutation(
         file="lib/IlmCtlSimd/CtlSimdReg.h",
         pattern=r"_inlineData = _data\[0\];",
@@ -97,15 +89,138 @@ MUTATIONS: list[Mutation] = [
         description="SimdBoolMask narrow: preserve lane[1] instead of lane[0]",
         target="IlmCtlTest",
     ),
+    # SimdReg::reference: assignment delete[]s old data before reassignment.
+    # Skipping the delete leaks memory but doesn't break observable values.
+    # Documents an inherent limit of unit-test mutation testing — only an
+    # ASan build catches this class.
+    Mutation(
+        file="lib/IlmCtlSimd/CtlSimdReg.cpp",
+        pattern=r"if \(_dataOwned\)\n\tdelete \[\] _data;\n\n    //",
+        replacement="if (_dataOwned)\n\t{ /* leak: _data; */ }\n\n    //",
+        description="reference(): leak _data instead of deleting (ASan-only catch)",
+        target="IlmCtlTest",
+    ),
+
+    # ---------------------------------------------------------------
+    # Group B: interpreter dispatch invariants
+    # ---------------------------------------------------------------
+
     # SimdInterpreter::maxSamples returns MAX_REG_SIZE.  Mutate to half.
-    # testConcurrentCalls asserts maxSamples >= shape.samples for every
-    # configured shape (8192 samples specifically); halving breaks that.
+    # testConcurrentCalls REQUIRE()s shape.samples <= maxSamples for every
+    # shape (8192 specifically); halving breaks that.
     Mutation(
         file="lib/IlmCtlSimd/CtlSimdInterpreter.cpp",
         pattern=r"return MAX_REG_SIZE;",
         replacement="return MAX_REG_SIZE / 2;",
         description="maxSamples() returns half MAX_REG_SIZE",
         target="IlmCtlTest",
+    ),
+
+    # ---------------------------------------------------------------
+    # Group C: SimdInst branch + loop semantics
+    # ---------------------------------------------------------------
+
+    # SimdBranchInst::execute fuses trueMask/falseMask construction with
+    # `t = mi & ci` (active lane AND condition true).  Replacing with
+    # plain `ci` ignores the active-lane mask — branches that should be
+    # masked-off lane-by-lane silently take the true path.  Catches an
+    # entire category of "mask not respected" regressions.
+    Mutation(
+        file="lib/IlmCtlSimd/CtlSimdInst.cpp",
+        pattern=r"const bool t  = mi & ci;",
+        replacement="const bool t  = ci;",
+        description="SimdBranchInst: ignore mask in trueMask construction",
+        target="IlmCtlTest",
+    ),
+
+    # Symmetric: falseMask branch ignores the active-lane mask.
+    Mutation(
+        file="lib/IlmCtlSimd/CtlSimdInst.cpp",
+        pattern=r"const bool f  = mi & !ci;",
+        replacement="const bool f  = !ci;",
+        description="SimdBranchInst: ignore mask in falseMask construction",
+        target="IlmCtlTest",
+    ),
+
+    # SimdBranchInst neither-branch lanes get memset to 0; flip to 1
+    # so neither-branch lanes write a non-zero bit pattern.  Caught by
+    # any test that takes a varying-condition branch.
+    Mutation(
+        file="lib/IlmCtlSimd/CtlSimdInst.cpp",
+        pattern=r"memset \(\(\*outReg\)\[i\], 0, eSize\);",
+        replacement="memset ((*outReg)[i], 1, eSize);",
+        description="SimdBranchInst: neither-branch lanes get pattern 0x01 not 0x00",
+        target="IlmCtlTest",
+    ),
+
+    # SimdLoopInst conditional-mask narrowing: original ANDs the loop
+    # mask with the condition (lanes that became false drop out).
+    # Mutating to plain `=` re-enables previously-masked lanes whenever
+    # the condition is true — runaway iterations on lanes that should
+    # have stopped.  Property-based test should catch this.
+    Mutation(
+        file="lib/IlmCtlSimd/CtlSimdInst.cpp",
+        pattern=r"loopMask\[i\] \&= \*\(bool\*\)\(condition\[i\]\);",
+        replacement="loopMask[i] = *(bool*)(condition[i]);",
+        description="SimdLoopInst: condition mask assignment forgets prior mask state",
+        target="IlmCtlTest",
+    ),
+
+    # ---------------------------------------------------------------
+    # Group D: ctlrender threading + parallel float->half
+    # ---------------------------------------------------------------
+
+    # transform.cc tile fetch_add: `next_tile.fetch_add(1, ...)` claims
+    # one tile per worker.  Replacing with `.load(...)` makes every
+    # worker see the same idx — multiple workers process the same tile
+    # while later tiles are skipped.  Caught by the threaded-parity
+    # cmp tests (output diverges from -threads 1 reference).
+    Mutation(
+        file="ctlrender/transform.cc",
+        pattern=r"size_t idx = next_tile\.fetch_add\(1, std::memory_order_relaxed\);",
+        replacement="size_t idx = next_tile.load(std::memory_order_relaxed);",
+        description="transform.cc: tile fetch_add -> load (workers race on same tile)",
+        target="ctlrender",
+    ),
+
+    # transform.cc worker_count autoselect: original uses
+    # `if (hw > 1) worker_count = hw;`.  Mutating to `worker_count = 1`
+    # (single-thread autoselect) means -threads 0 silently runs serial.
+    # Caught by ctlrender-threads-autoselect-cmp (byte parity vs
+    # -threads 1 reference; would actually still match because both are
+    # serial — DOCUMENTED as expected survivor for this reason).
+    Mutation(
+        file="ctlrender/transform.cc",
+        pattern=r"if \(hw > 1\) worker_count = hw;",
+        replacement="worker_count = 1;",
+        description="transform.cc: -threads 0 autoselect always serial (expected SURVIVOR — byte-parity equivalent)",
+        target="ctlrender",
+    ),
+
+    # exr_file.cc parallel float->half: each worker grabs `kChunk`
+    # elements via fetch_add.  Mutating to grab `kChunk - 1` means each
+    # chunk loses its last element to the half(0.0f) default-construction
+    # of the std::vector<half> output buffer's tail.  Wait — output
+    # is half_pixels.ptr() (raw memory), not zero-initialised, so the
+    # last element of each chunk gets uninitialised garbage.  Caught
+    # by ctlrender-parallel-half-cmp-* (byte parity).
+    Mutation(
+        file="ctlrender/exr_file.cc",
+        pattern=r"uint64_t end = begin \+ kChunk;",
+        replacement="uint64_t end = begin + kChunk - 1;",
+        description="exr_file.cc parallel half: chunk one element short",
+        target="ctlrender",
+    ),
+
+    # exr_file.cc parallel float->half: replace the conversion body with
+    # a hard-coded zero output.  Trivially caught by every parallel-half
+    # test, but useful as a sanity check that the harness is wired up.
+    Mutation(
+        file="ctlrender/exr_file.cc",
+        pattern=r"out\[i\] = half\(fIn\[i\]\);",
+        replacement="out[i] = half(0.0f);",
+        description="exr_file.cc parallel half: emit zero instead of converted value",
+        target="ctlrender",
     ),
 ]
 
@@ -142,12 +257,20 @@ def run_build(build_dir: pathlib.Path, target: str) -> tuple[bool, str]:
     return (proc.returncode == 0, proc.stderr or proc.stdout[-2000:])
 
 
-def run_tests(build_dir: pathlib.Path, test_filter: str) -> tuple[bool, str]:
-    cmd = ["ctest"]
+def run_tests(build_dir: pathlib.Path, test_filter: str,
+              timeout_s: int = 60) -> tuple[bool, str]:
+    """Run the test suite with a hard timeout — a mutation that creates an
+    infinite loop must not hang the harness.  Treat timeout as 'caught'
+    (the mutation produced observable wrong behaviour: a hang)."""
+    cmd = ["ctest", "--timeout", str(timeout_s)]
     if test_filter:
         cmd += ["-R", test_filter]
-    proc = subprocess.run(
-        cmd, cwd=str(build_dir), capture_output=True, text=True)
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(build_dir), capture_output=True, text=True,
+            timeout=timeout_s * 4)
+    except subprocess.TimeoutExpired:
+        return (False, "harness timeout — mutation likely caused a hang")
     return (proc.returncode == 0, proc.stdout[-2000:])
 
 
