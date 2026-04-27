@@ -56,6 +56,7 @@
 #include <testEndOfLine.h>
 #include <testParser.h>
 #include <testCppCall.h>
+#include <testSimdRegAddr.h>
 #include <testUniformBoolDefault.h>
 #include <testVarying.h>
 #include <testHugeInit.h>
@@ -75,6 +76,7 @@ main (int argc, char *argv[])
 
     TEST (testEndOfLine);
     TEST (testParser);
+    TEST (testSimdRegAddr);
     TEST (testUniformBoolDefault);
     TEST (testExamples);
     TEST (testCppCall);

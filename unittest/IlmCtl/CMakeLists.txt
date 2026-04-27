@@ -5,6 +5,7 @@ set(SOURCES
 	testExamples.cpp
 	testHugeInit.cpp
 	testParser.cpp
+	testSimdRegAddr.cpp
 	testUniformBoolDefault.cpp
 	testVarying.cpp
 	testVaryingLookup.cpp
