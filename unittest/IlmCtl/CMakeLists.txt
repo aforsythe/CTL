@@ -1,5 +1,6 @@
 set(SOURCES
 	main.cpp
+	testConcurrentCalls.cpp
 	testCppCall.cpp
 	testEndOfLine.cpp
 	testExamples.cpp
@@ -53,6 +54,7 @@ file(COPY
 	testExpr.ctl
 	testFunc.ctl
 	testHugeInit.ctl
+	testConcurrentCalls.ctl
 	testInterpolator.ctl
 	testLiterals.ctl
 	testLookupTables.ctl
