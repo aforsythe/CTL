@@ -372,6 +372,67 @@ if(OpenEXR_FOUND)
     set_tests_properties("ctlrender-input-scale-run" PROPERTIES DEPENDS "ctlrender-input-scale-ref")
     set_tests_properties("ctlrender-input-scale-cmp" PROPERTIES DEPENDS "ctlrender-input-scale-run")
 
+    # -input_scale through a NON-unity chain: verifies the scale is
+    # applied to the input BEFORE the CTL chain runs (not after, not
+    # silently ignored).  -input_scale 0.5 then gain=2.0 cancels out to
+    # identity, so the output must be byte-equal to running unity on
+    # the unscaled input.  A bug applying input_scale at the wrong
+    # pipeline point (or dropping it through chained transforms) would
+    # change the bytes.
+    add_test(NAME "ctlrender-input-scale-nonunity-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                -format exr32 -force "${_FX}" "${_OUT}/scale_nu_ref.exr")
+    add_test(NAME "ctlrender-input-scale-nonunity-run"
+        COMMAND ${CTLRENDER_PATH} -input_scale 0.5
+                -ctl "${TEST_FILES}/image_with_param.ctl" -p1 gain 2.0
+                -format exr32 -force "${_FX}" "${_OUT}/scale_nu_run.exr")
+    add_test(NAME "ctlrender-input-scale-nonunity-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/scale_nu_ref.exr" "${_OUT}/scale_nu_run.exr")
+    set_tests_properties("ctlrender-input-scale-nonunity-run"
+        PROPERTIES DEPENDS "ctlrender-input-scale-nonunity-ref")
+    set_tests_properties("ctlrender-input-scale-nonunity-cmp"
+        PROPERTIES DEPENDS "ctlrender-input-scale-nonunity-run")
+
+    # -output_scale: implemented in exr_write as `pixel / scale` (the
+    # factor "denormalises" pixel values on the way out, mirroring
+    # input_scale's `pixel *= scale` on the way in).  So pairing
+    # in-chain gain=0.5 with -output_scale 0.5 gives (R * 0.5) / 0.5 = R,
+    # i.e. byte-identical to a unity-equivalent reference.  Uses the
+    # float-typed fixture so intermediate values stay in float — half
+    # quantization between ops would break byte parity even for
+    # algebraically equivalent compositions.
+    add_test(NAME "ctlrender-scale-float-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/image_with_param_float.ctl" -p1 gain 1.0
+                -format exr32 -force "${_FX}" "${_OUT}/scale_f_ref.exr")
+    add_test(NAME "ctlrender-output-scale-run"
+        COMMAND ${CTLRENDER_PATH} -output_scale 0.5
+                -ctl "${TEST_FILES}/image_with_param_float.ctl" -p1 gain 0.5
+                -format exr32 -force "${_FX}" "${_OUT}/oscale_run.exr")
+    add_test(NAME "ctlrender-output-scale-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/scale_f_ref.exr" "${_OUT}/oscale_run.exr")
+    set_tests_properties("ctlrender-output-scale-run"
+        PROPERTIES DEPENDS "ctlrender-scale-float-ref")
+    set_tests_properties("ctlrender-output-scale-cmp"
+        PROPERTIES DEPENDS "ctlrender-output-scale-run")
+
+    # Both scales together: -input_scale 0.5 + chain -p1 gain 4.0 +
+    # -output_scale 2.0 == identity:  ((R * 0.5) * 4.0) / 2.0 = R.
+    # Pins the interaction between input_scale (read-side multiply),
+    # in-chain math, and output_scale (write-side divide) all at once.
+    add_test(NAME "ctlrender-both-scales-run"
+        COMMAND ${CTLRENDER_PATH} -input_scale 0.5 -output_scale 2.0
+                -ctl "${TEST_FILES}/image_with_param_float.ctl" -p1 gain 4.0
+                -format exr32 -force "${_FX}" "${_OUT}/both_scales_run.exr")
+    add_test(NAME "ctlrender-both-scales-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/scale_f_ref.exr" "${_OUT}/both_scales_run.exr")
+    set_tests_properties("ctlrender-both-scales-run"
+        PROPERTIES DEPENDS "ctlrender-scale-float-ref")
+    set_tests_properties("ctlrender-both-scales-cmp"
+        PROPERTIES DEPENDS "ctlrender-both-scales-run")
+
     # -global_param1 gain V applies to every -ctl in the chain.  With a
     # single -ctl image_with_param.ctl, it should be byte-equivalent to
     # the same chain with -p1 gain V (per-operation override).
