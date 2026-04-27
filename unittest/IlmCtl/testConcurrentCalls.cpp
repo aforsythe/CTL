@@ -34,12 +34,13 @@
 #include <CtlType.h>
 #include <testConcurrentCalls.h>
 
+#include <testRequire.h>
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
 #include <thread>
 #include <vector>
-#include <cassert>
 #include <cstring>
 #include <cstdio>
 
@@ -165,7 +166,7 @@ runOneIteration (SimdInterpreter &interp,
 	    fprintf(stderr,
 		    "iter %d, thread %d failed: %s\n",
 		    iterIdx, t, workers[t].failMessage.c_str());
-	    assert(false && "worker reported failure");
+	    REQUIRE(false && "worker reported failure");
 	}
 	for (size_t i = 0; i < nSamples; ++i)
 	{
@@ -178,7 +179,7 @@ runOneIteration (SimdInterpreter &interp,
 		        "expected %.7f got %.7f (in=%.7f, k=%.7f)\n",
 		        iterIdx, t, i, expected, got,
 		        workers[t].input[i], workers[t].k);
-		assert(false && "per-lane output diverges from serial expectation");
+		REQUIRE(false && "per-lane output diverges from serial expectation");
 	    }
 	}
     }
@@ -223,7 +224,7 @@ testConcurrentCalls ()
 	    cerr << "test bug: shape " << s << " sample count "
 		 << shapes[s].samples << " exceeds maxSamples=" << cap
 		 << endl;
-	    assert(false);
+	    REQUIRE(false);
 	}
 	cout << "  threads=" << shapes[s].threads
 	     << " samples=" << shapes[s].samples

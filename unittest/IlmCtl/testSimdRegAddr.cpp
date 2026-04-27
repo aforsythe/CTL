@@ -34,7 +34,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstring>
-#include <cassert>
+#include <testRequire.h>
 
 using namespace Ctl;
 using namespace std;
@@ -52,7 +52,7 @@ testSimdRegHeapValueCtor ()
     {
 	float lane;
 	memcpy(&lane, r[i], sizeof(float));
-	assert(lane == 0.0f);
+	REQUIRE(lane == 0.0f);
     }
 
     // Write a distinctive value to every lane, read it back.
@@ -65,7 +65,7 @@ testSimdRegHeapValueCtor ()
     {
 	float lane;
 	memcpy(&lane, r[i], sizeof(float));
-	assert(lane == static_cast<float>(i) * 0.5f - 1.0f);
+	REQUIRE(lane == static_cast<float>(i) * 0.5f - 1.0f);
     }
 }
 
@@ -86,7 +86,7 @@ testSimdRegSetVaryingTransitions ()
     {
 	float v;
 	memcpy(&v, r[i], sizeof(float));
-	assert(v == seed);
+	REQUIRE(v == seed);
     }
 
     // Mutate lane 0, narrow back to non-varying — value preserved.
@@ -95,7 +95,7 @@ testSimdRegSetVaryingTransitions ()
     r.setVarying(false);
     float final;
     memcpy(&final, r[0], sizeof(float));
-    assert(final == other);
+    REQUIRE(final == other);
 }
 
 
@@ -112,7 +112,7 @@ testSimdRegArenaBacked ()
     {
 	float v;
 	memcpy(&v, r1[i], sizeof(float));
-	assert(v == 0.0f);
+	REQUIRE(v == 0.0f);
     }
 
     // zeroInit=false — caller is responsible; just verify writeback works.
@@ -126,7 +126,7 @@ testSimdRegArenaBacked ()
     {
 	float v;
 	memcpy(&v, r2[i], sizeof(float));
-	assert(v == static_cast<float>(i));
+	REQUIRE(v == static_cast<float>(i));
     }
 }
 
@@ -139,15 +139,15 @@ testSimdRegCreateInArena ()
     SimdArena arena;
     SimdReg *r = SimdReg::createInArena(arena, /*varying=*/true,
 					sizeof(float), /*zeroInit=*/true);
-    assert(r != nullptr);
-    assert(r->isArenaOwned());
+    REQUIRE(r != nullptr);
+    REQUIRE(r->isArenaOwned());
 
     // Smoke-test the buffer.
     float v = 99.0f;
     memcpy((*r)[0], &v, sizeof(float));
     float back;
     memcpy(&back, (*r)[0], sizeof(float));
-    assert(back == 99.0f);
+    REQUIRE(back == 99.0f);
 
     SimdReg::destroy(r);   // arena-aware teardown — must not call operator delete.
 }
@@ -168,7 +168,7 @@ testSimdRegStructMemberReference ()
     SimdBoolMask mask (false);   // non-varying mask, all lanes active
     SimdReg ref (owner, mask, memberOffset, MAX_REG_SIZE);
 
-    assert(ref.isReference());
+    REQUIRE(ref.isReference());
 
     // Write distinct values through the reference at lanes 0, 1, 7, 100.
     int lanes[] = {0, 1, 7, 100};
@@ -183,7 +183,7 @@ testSimdRegStructMemberReference ()
     {
 	uint32_t got;
 	memcpy(&got, owner[lanes[k]] + memberOffset, sizeof(uint32_t));
-	assert(got == values[k]);
+	REQUIRE(got == values[k]);
     }
 }
 
@@ -195,28 +195,41 @@ testSimdBoolMaskBasics ()
 
     // Non-varying: inline scalar storage.
     SimdBoolMask m (false);
-    assert(!m.isVarying());
+    REQUIRE(!m.isVarying());
     m[0] = true;
-    assert(m[5] == true);   // non-varying: any index reads lane[0]
+    REQUIRE(m[5] == true);   // non-varying: any index reads lane[0]
     m[0] = false;
-    assert(m[123] == false);
+    REQUIRE(m[123] == false);
 
     // Promote to varying: every lane should equal the prior scalar value.
     m[0] = true;
     m.setVarying(true);
-    assert(m.isVarying());
+    REQUIRE(m.isVarying());
     for (int i = 0; i < 32; ++i)
-	assert(m[i] == true);
+	REQUIRE(m[i] == true);
 
     // Mutate lane 5; lane 0 should still be true; lane 5 false.
     m[5] = false;
-    assert(m[0] == true);
-    assert(m[5] == false);
+    REQUIRE(m[0] == true);
+    REQUIRE(m[5] == false);
 
     // Narrow: lane[0] preserved.
     m.setVarying(false);
-    assert(!m.isVarying());
-    assert(m[0] == true);
+    REQUIRE(!m.isVarying());
+    REQUIRE(m[0] == true);
+
+    // Stronger lane[0]-vs-lane[1] discrimination check:
+    // mutation testing surfaced that the previous narrow-preserve check
+    // could pass even if setVarying(false) preserved a different lane.
+    // Set lane[0] explicitly different from lane[1] before narrow, then
+    // verify the inline scalar holds lane[0]'s value, not lane[1]'s.
+    m.setVarying(true);
+    for (int i = 0; i < 16; ++i) m[i] = true;
+    m[0] = false;            // lane[0] must differ from lane[1]
+    REQUIRE(m[0] == false);
+    REQUIRE(m[1] == true);
+    m.setVarying(false);
+    REQUIRE(m[0] == false);  // narrow MUST preserve lane[0], not lane[1]
 }
 
 
@@ -230,9 +243,9 @@ testSimdBoolMaskCopyAndPoolExhaustion ()
 	src[i] = (i & 1) != 0;
 
     SimdBoolMask dst (src, /*copyLen=*/10);
-    assert(dst.isVarying());
+    REQUIRE(dst.isVarying());
     for (int i = 0; i < 10; ++i)
-	assert(dst[i] == ((i & 1) != 0));
+	REQUIRE(dst[i] == ((i & 1) != 0));
 
     // Allocate well past detail::BoolBufferPool::kCacheMax (32) — the
     // overflow falls through to heap alloc/free.  Just constructing
@@ -249,7 +262,7 @@ testSimdBoolMaskCopyAndPoolExhaustion ()
 	}
 	for (int i = 63; i >= 0; --i)
 	{
-	    assert((*masks[i])[0] == ((i & 1) == 0));
+	    REQUIRE((*masks[i])[0] == ((i & 1) == 0));
 	    delete masks[i];
 	}
     }
@@ -257,7 +270,7 @@ testSimdBoolMaskCopyAndPoolExhaustion ()
     // After the burst, a fresh allocation should still work and be writable.
     SimdBoolMask after (true);
     after[0] = true;
-    assert(after[0] == true);
+    REQUIRE(after[0] == true);
 }
 
 
@@ -272,20 +285,20 @@ testSimdArenaAlignmentAndReset ()
     char *p1 = arena.allocate(13);
     char *p2 = arena.allocate(1);
     char *p3 = arena.allocate(64);
-    assert(p1 != nullptr && p2 != nullptr && p3 != nullptr);
-    assert((reinterpret_cast<uintptr_t>(p1) & 15) == 0);
-    assert((reinterpret_cast<uintptr_t>(p2) & 15) == 0);
-    assert((reinterpret_cast<uintptr_t>(p3) & 15) == 0);
+    REQUIRE(p1 != nullptr && p2 != nullptr && p3 != nullptr);
+    REQUIRE((reinterpret_cast<uintptr_t>(p1) & 15) == 0);
+    REQUIRE((reinterpret_cast<uintptr_t>(p2) & 15) == 0);
+    REQUIRE((reinterpret_cast<uintptr_t>(p3) & 15) == 0);
     // Each subsequent allocation begins after the previous (rounded up
     // to alignment): p2 should be at least 16 bytes past p1.
-    assert(p2 >= p1 + 16);
-    assert(p3 >= p2 + 16);
+    REQUIRE(p2 >= p1 + 16);
+    REQUIRE(p3 >= p2 + 16);
 
     // Reset, then re-allocate — should reuse chunk 0 (returns the same
     // base pointer for the first allocation).
     arena.reset();
     char *q = arena.allocate(13);
-    assert(q == p1);
+    REQUIRE(q == p1);
 
     // Force a multi-chunk growth: allocate something larger than the
     // initial chunk's remaining space.  The arena adds a new chunk;
@@ -293,10 +306,10 @@ testSimdArenaAlignmentAndReset ()
     arena.reset();
     char *first = arena.allocate(16);
     char *huge  = arena.allocate(4 * 1024 * 1024);   // 4 MiB > 2 MiB chunk
-    assert(huge != nullptr);
+    REQUIRE(huge != nullptr);
     // Original pointer still readable/writable after growth.
     first[0] = 'X';
-    assert(first[0] == 'X');
+    REQUIRE(first[0] == 'X');
 }
 
 
@@ -308,25 +321,25 @@ testSimdDataAddr ()
     // Absolute (reg) ctor.
     SimdReg backing (false, sizeof(float));
     SimdDataAddr abs(&backing);
-    assert(abs.reg() == &backing);
+    REQUIRE(abs.reg() == &backing);
 
     // Frame-pointer-relative ctor.
     SimdDataAddr fpRel(/*fpOffset=*/-32);
-    assert(fpRel.reg() == nullptr);   // relative addrs return null from no-arg reg()
+    REQUIRE(fpRel.reg() == nullptr);   // relative addrs return null from no-arg reg()
 
     // Copy ctor — preserves both branches.
     SimdDataAddr absCopy(abs);
-    assert(absCopy.reg() == &backing);
+    REQUIRE(absCopy.reg() == &backing);
 
     SimdDataAddr fpCopy(fpRel);
-    assert(fpCopy.reg() == nullptr);
+    REQUIRE(fpCopy.reg() == nullptr);
 
     // operator= — both branches.
     SimdDataAddr a(&backing);
     a = fpRel;
-    assert(a.reg() == nullptr);
+    REQUIRE(a.reg() == nullptr);
     a = abs;
-    assert(a.reg() == &backing);
+    REQUIRE(a.reg() == &backing);
 
     // print(): rebind cout to a stringstream so we can run both branches
     // without polluting the test output.
@@ -336,8 +349,8 @@ testSimdDataAddr ()
     fpRel.print(4);
     std::cout.rdbuf(prev);
     const std::string out = capture.str();
-    assert(out.find("reg addr") != std::string::npos);
-    assert(out.find("reg fp offset -32") != std::string::npos);
+    REQUIRE(out.find("reg addr") != std::string::npos);
+    REQUIRE(out.find("reg fp offset -32") != std::string::npos);
 }
 
 } // anonymous namespace
