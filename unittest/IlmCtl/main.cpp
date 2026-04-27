@@ -61,6 +61,7 @@
 #include <testSimdRegAddr.h>
 #include <testUniformBoolDefault.h>
 #include <testVarying.h>
+#include <testVaryingArrayIndex.h>
 #include <testHugeInit.h>
 #include <testVaryingReturn.h>
 #include <testVaryingLookup.h>
@@ -82,6 +83,7 @@ main (int argc, char *argv[])
     TEST (testSimdRegAddr);
     TEST (testConcurrentCalls);
     TEST (testUniformBoolDefault);
+    TEST (testVaryingArrayIndex);
     TEST (testExamples);
     TEST (testCppCall);
     TEST (testVarying);
