@@ -146,6 +146,41 @@ option(CTL_HIDDEN_VISIBILITY
   "-fvisibility=hidden + -fvisibility-inlines-hidden in Release builds"
   ON)
 
+# Runtime sanitizer instrumentation.  Replaces the normal Release flags
+# with the chosen sanitizer's flags; PGO and LTO are forced off because
+# both interact poorly with sanitizer instrumentation (the runtime
+# checks fight the optimisation passes).  Configure with:
+#
+#   cmake -DCTL_SANITIZER=ADDRESS -DCMAKE_BUILD_TYPE=Debug ...
+#
+# then the standard `ctest` runs the test suite under the sanitizer.
+# tools/run_sanitizer_tests.sh wraps the configure+build+ctest cycle.
+#
+# Catches the class of bugs unit tests can't see directly:
+#   ADDRESS   — heap leaks, use-after-free, double-free, OOB
+#   THREAD    — data races (used during testConcurrentCalls dev)
+#   UNDEFINED — signed integer overflow, misaligned access, etc.
+set(CTL_SANITIZER "OFF" CACHE STRING
+  "Runtime sanitizer: OFF, ADDRESS, THREAD, UNDEFINED")
+set_property(CACHE CTL_SANITIZER PROPERTY STRINGS "OFF" "ADDRESS" "THREAD" "UNDEFINED")
+
+if(NOT CTL_SANITIZER STREQUAL "OFF")
+  if(CTL_SANITIZER STREQUAL "ADDRESS")
+    set(_san_flag "-fsanitize=address")
+  elseif(CTL_SANITIZER STREQUAL "THREAD")
+    set(_san_flag "-fsanitize=thread")
+  elseif(CTL_SANITIZER STREQUAL "UNDEFINED")
+    set(_san_flag "-fsanitize=undefined")
+  else()
+    message(FATAL_ERROR "CTL_SANITIZER must be OFF, ADDRESS, THREAD, or UNDEFINED (got '${CTL_SANITIZER}').")
+  endif()
+  message(STATUS "CTL_SANITIZER=${CTL_SANITIZER}: applying ${_san_flag}; forcing CTL_PGO=OFF and CTL_LTO=OFF (sanitizers conflict with both)")
+  set(CTL_PGO "OFF" CACHE STRING "" FORCE)
+  set(CTL_LTO OFF CACHE BOOL "" FORCE)
+  add_compile_options(${_san_flag} -fno-omit-frame-pointer -O1)
+  add_link_options(${_san_flag})
+endif()
+
 # Profile-guided optimization (clang -fprofile-generate / -fprofile-use).
 # Four-state knob: AUTO, OFF, GENERATE, USE.
 #
