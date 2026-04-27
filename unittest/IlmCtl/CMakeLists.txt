@@ -2,12 +2,14 @@ set(SOURCES
 	main.cpp
 	testConcurrentCalls.cpp
 	testCppCall.cpp
+	testEdgeValues.cpp
 	testEndOfLine.cpp
 	testExamples.cpp
 	testExc.cpp
 	testHugeInit.cpp
 	testParser.cpp
 	testSimdRegAddr.cpp
+	testSimdRegOwnership.cpp
 	testUniformBoolDefault.cpp
 	testVarying.cpp
 	testVaryingArrayIndex.cpp
@@ -57,6 +59,7 @@ file(COPY
 	testFunc.ctl
 	testHugeInit.ctl
 	testConcurrentCalls.ctl
+	testEdgeValues.ctl
 	testInterpolator.ctl
 	testLiterals.ctl
 	testLookupTables.ctl
