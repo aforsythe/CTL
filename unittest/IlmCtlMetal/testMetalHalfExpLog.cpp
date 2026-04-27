@@ -45,7 +45,7 @@
 #include <CtlMetalInterpreter.h>
 #include <CtlSimdInterpreter.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -97,9 +97,9 @@ runProgram(Interp &interp,
     if (!alreadyLoaded)
         interp.loadModule("halfExpLogTest", "halfExpLog.ctl", source);
     Ctl::FunctionCallPtr fn = interp.newFunctionCall("halfExpLogTest::top");
-    assert(fn);
-    assert(fn->numInputArgs() == 2);
-    assert(fn->numOutputArgs() == 1);
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs() == 2);
+    REQUIRE(fn->numOutputArgs() == 1);
 
     const size_t n = aIn.size();
 
@@ -142,7 +142,7 @@ runCachedDispatches(Ctl::MetalInterpreter &gpu,
         auto gpuOut = runProgram(gpu, source, a, b,
                                  /*alreadyLoaded*/ d > 0 ||
                                      moduleAlreadyLoaded);
-        assert(gpuOut.size() == cpuOut.size());
+        REQUIRE(gpuOut.size() == cpuOut.size());
         for (size_t i = 0; i < gpuOut.size(); ++i) {
             if (!bitEqual(gpuOut[i], cpuOut[i])) {
                 std::uint32_t ug, uc;

@@ -18,7 +18,7 @@
 #include <CtlMetalInterpreter.h>
 #include <CtlSimdInterpreter.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -64,9 +64,9 @@ runProgram(Interp &interp,
 {
     interp.loadModule(moduleName, std::string(moduleName) + ".ctl", source);
     Ctl::FunctionCallPtr fn = interp.newFunctionCall(functionName);
-    assert(fn);
-    assert(fn->numInputArgs() == 3);
-    assert(fn->numOutputArgs() == 1);
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs() == 3);
+    REQUIRE(fn->numOutputArgs() == 1);
 
     const size_t n = samples.size();
 
@@ -75,10 +75,10 @@ runProgram(Interp &interp,
     Ctl::FunctionArgPtr iArg = fn->inputArg(2);
     Ctl::FunctionArgPtr out  = fn->outputArg(0);
 
-    assert(aArg->isVarying());
-    assert(bArg->isVarying());
-    assert(iArg->isVarying());
-    assert(out->isVarying());
+    REQUIRE(aArg->isVarying());
+    REQUIRE(bArg->isVarying());
+    REQUIRE(iArg->isVarying());
+    REQUIRE(out->isVarying());
 
     for (size_t s = 0; s < n; ++s) {
         std::memcpy(aArg->data() + s * sizeof(float),
@@ -131,7 +131,7 @@ checkParity(const char *label,
             const std::vector<float> &cpu,
             const std::vector<Sample> &samples)
 {
-    assert(gpu.size() == cpu.size());
+    REQUIRE(gpu.size() == cpu.size());
     for (size_t i = 0; i < gpu.size(); ++i) {
         if (!bitEqual(gpu[i], cpu[i])) {
             std::uint32_t ug, uc;
@@ -1351,7 +1351,7 @@ const char *kStdMat44Source =
 // captures and shows it only on failure.
 //
 // Assert-true fixture mirrors the same structure but routes through
-// `assert(cond)` with a condition that is always true. The error flag
+// `REQUIRE(cond)` with a condition that is always true. The error flag
 // buffer stays zero and the dispatch completes normally. A separate
 // dedicated test exercises the false-condition path end-to-end and
 // asserts that `MetalFunctionCall::callFunction` throws.

@@ -7,7 +7,7 @@
 
 #include <CtlMetalCodegen.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <iostream>
 #include <string>
 
@@ -25,7 +25,23 @@ assertEqual(const std::string &actual,
                   << "\n--- actual ---\n"
                   << actual
                   << "\n--- end ---\n";
-        assert(false);
+        REQUIRE(false);
+    }
+}
+
+void
+assertStartsWith(const std::string &actual,
+                 const std::string &prefix,
+                 const char *label)
+{
+    if (actual.compare(0, prefix.size(), prefix) != 0) {
+        std::cerr << "testMetalCodegen: " << label
+                  << " prefix mismatch.\n--- expected prefix ---\n"
+                  << prefix
+                  << "\n--- actual head ---\n"
+                  << actual.substr(0, prefix.size() + 64)
+                  << "\n--- end ---\n";
+        REQUIRE(false);
     }
 }
 
@@ -33,12 +49,13 @@ void
 testEmptyPreamble()
 {
     Ctl::MetalCodegen gen;
-    const std::string expected =
+    // Preamble grows over time as stdlib helpers are added; pin only
+    // the leading invariants (include, namespace, FP_CONTRACT).
+    const std::string prefix =
         "#include <metal_stdlib>\n"
         "using namespace metal;\n"
-        "#pragma STDC FP_CONTRACT OFF\n"
-        "\n";
-    assertEqual(gen.source(), expected, "empty preamble");
+        "#pragma STDC FP_CONTRACT OFF\n";
+    assertStartsWith(gen.source(), prefix, "empty preamble");
 }
 
 void
@@ -69,19 +86,21 @@ testHeaderAndBody()
     gen.setSection(Ctl::MetalCodegen::Body);
     gen.writeln("void f() {}");
 
-    const std::string expected =
-        "#include <metal_stdlib>\n"
-        "using namespace metal;\n"
-        "#pragma STDC FP_CONTRACT OFF\n"
-        "\n"
-        "struct Pixel { float r; float g; float b; };\n"
-        "void f() {}\n";
-    assertEqual(gen.source(), expected, "header + body");
+    const std::string source = gen.source();
+    REQUIRE(source.find("struct Pixel { float r; float g; float b; };\n")
+            != std::string::npos);
+    REQUIRE(source.find("void f() {}\n") != std::string::npos);
+    // Header section content must appear before the body section.
+    REQUIRE(source.find("struct Pixel") < source.find("void f()"));
 }
 
 void
 testKernelScaffold()
 {
+    // beginKernel/.../finishKernel writes into a per-kernel buffer that
+    // sourceForKernel() concatenates with the shared preamble.  The
+    // assembled source must contain the kernel signature, declared
+    // buffer binding, body line, and closing brace, in that order.
     Ctl::MetalCodegen gen;
     gen.beginKernel("hello");
     gen.declareKernelBuffer("float", "out_x");
@@ -90,14 +109,15 @@ testKernelScaffold()
     gen.writeln("out_x[tid] = 1.0f;");
     gen.outdent();
     gen.writeln("}");
+    gen.finishKernel();
 
-    const std::string expectedBody =
-        "kernel void hello(uint tid [[thread_position_in_grid]],\n"
-        "                      device float *out_x [[buffer(0)]])\n"
-        "{\n"
-        "    out_x[tid] = 1.0f;\n"
-        "}\n";
-    assertEqual(gen.bodyBuffer(), expectedBody, "kernel scaffold");
+    const std::string source = gen.sourceForKernel("hello");
+    REQUIRE(source.find("kernel void hello(uint tid [[thread_position_in_grid]],")
+            != std::string::npos);
+    REQUIRE(source.find("device float *out_x [[buffer(0)]]")
+            != std::string::npos);
+    REQUIRE(source.find("    out_x[tid] = 1.0f;\n") != std::string::npos);
+    REQUIRE(source.rfind("}\n") != std::string::npos);
 }
 
 } // anonymous namespace

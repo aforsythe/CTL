@@ -23,7 +23,7 @@
 #include <CtlMetalDevice.h>
 #include <CtlMetalInterpreter.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <iostream>
 #include <string>
 
@@ -111,7 +111,7 @@ testMetalLanguageRejections()
         Ctl::MetalInterpreter interp;
         const bool rejected = loadAndProbeFails(
             interp, "rec", kDirectRecursionSource, "rec::compute");
-        assert(rejected && "direct recursion must be rejected");
+        REQUIRE(rejected && "direct recursion must be rejected");
         std::cout << "  direct self-recursion rejected" << std::endl;
     }
 
@@ -128,7 +128,7 @@ testMetalLanguageRejections()
         Ctl::MetalInterpreter interp;
         const bool rejected = loadFileAndProbeFails(
             interp, "example.ctl", "example", "ilm::factorial2");
-        assert(rejected &&
+        REQUIRE(rejected &&
                "example.ctl::factorial2 must be rejected (recursive)");
         std::cout << "  example.ctl recursion rejected" << std::endl;
     }

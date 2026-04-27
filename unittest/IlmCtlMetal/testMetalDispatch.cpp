@@ -24,7 +24,7 @@
 
 #include <Iex.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <iostream>
 #include <vector>
 
@@ -54,7 +54,7 @@ runConstantOutputKernel()
         if (out[i] != 1.0f) {
             std::cerr << "testMetalDispatch: out[" << i << "] = "
                       << out[i] << ", expected 1.0" << std::endl;
-            assert(false);
+            REQUIRE(false);
         }
     }
 }

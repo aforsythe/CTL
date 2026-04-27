@@ -33,7 +33,7 @@
 
 #include <half.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -91,9 +91,9 @@ runFixture(Interp &interp,
 {
     interp.loadFile(fx.file, fx.moduleName);
     Ctl::FunctionCallPtr fn = interp.newFunctionCall(fx.functionName);
-    assert(fn);
-    assert(fn->numInputArgs() == fx.inputs.size());
-    assert(fn->numOutputArgs() == fx.outputs.size());
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs() == fx.inputs.size());
+    REQUIRE(fn->numOutputArgs() == fx.outputs.size());
 
     // Resolve input args by name so the fixture declaration order need
     // not match the function's parameter order.
@@ -110,7 +110,7 @@ runFixture(Interp &interp,
                       << "' not found in fixture " << fx.file << std::endl;
             std::abort();
         }
-        assert(arg->isVarying());
+        REQUIRE(arg->isVarying());
 
         std::vector<half> samples =
             makeHalfSamples(numSamples, baseSeed + uint32_t(i));
@@ -134,7 +134,7 @@ runFixture(Interp &interp,
                       << "' not found in fixture " << fx.file << std::endl;
             std::abort();
         }
-        assert(arg->isVarying());
+        REQUIRE(arg->isVarying());
         std::memcpy(result.data() + i * numSamples,
                     arg->data(),
                     numSamples * sizeof(half));
@@ -176,8 +176,8 @@ checkFixtureParity(const VaryingHalfFixture &fx,
                    const std::vector<half> &cpu,
                    size_t numSamples)
 {
-    assert(gpu.size() == cpu.size());
-    assert(gpu.size() == fx.outputs.size() * numSamples);
+    REQUIRE(gpu.size() == cpu.size());
+    REQUIRE(gpu.size() == fx.outputs.size() * numSamples);
 
     int32_t maxUlp = 0;
     size_t  diverged = 0;

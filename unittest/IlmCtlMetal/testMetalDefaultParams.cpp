@@ -21,7 +21,7 @@
 #include <CtlMetalDevice.h>
 #include <CtlMetalInterpreter.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -50,17 +50,17 @@ runUniformDefault()
     metal.loadModule("mdp", "mdp.ctl", src);
 
     Ctl::FunctionCallPtr fn = metal.newFunctionCall("mdp::observe");
-    assert(fn);
-    assert(fn->numInputArgs() == 2);
-    assert(fn->numOutputArgs() == 1);
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs() == 2);
+    REQUIRE(fn->numOutputArgs() == 1);
 
     Ctl::FunctionArgPtr argI = fn->inputArg(0);
     Ctl::FunctionArgPtr argX = fn->inputArg(1);
     Ctl::FunctionArgPtr out  = fn->outputArg(0);
 
-    assert(!argX->isVarying());
-    assert(argI->hasDefaultValue() == false);
-    assert(argX->hasDefaultValue() == true);
+    REQUIRE(!argX->isVarying());
+    REQUIRE(argI->hasDefaultValue() == false);
+    REQUIRE(argX->hasDefaultValue() == true);
 
     std::memset(argI->data(), 0, sizeof(int));
 
@@ -70,7 +70,7 @@ runUniformDefault()
     std::memcpy(argX->data(), &xSet, sizeof(float));
     fn->callFunction(1);
     const float gotSet = *reinterpret_cast<const float *>(out->data());
-    assert(gotSet == xSet);
+    REQUIRE(gotSet == xSet);
 
     // Now request the default and confirm the emitted kernel sees 2.0.
     argX->setDefaultValue();
@@ -106,12 +106,12 @@ runVaryingDefault()
     metal.loadModule("mdp2", "mdp2.ctl", src);
 
     Ctl::FunctionCallPtr fn = metal.newFunctionCall("mdp2::observe");
-    assert(fn);
+    REQUIRE(fn);
 
     Ctl::FunctionArgPtr argX = fn->inputArg(0);
     Ctl::FunctionArgPtr out  = fn->outputArg(0);
-    assert(argX->isVarying());
-    assert(argX->hasDefaultValue() == true);
+    REQUIRE(argX->isVarying());
+    REQUIRE(argX->hasDefaultValue() == true);
 
     argX->setDefaultValue();
 
@@ -149,10 +149,10 @@ runNoDefault()
     metal.loadModule("mdp3", "mdp3.ctl", src);
 
     Ctl::FunctionCallPtr fn = metal.newFunctionCall("mdp3::observe");
-    assert(fn);
+    REQUIRE(fn);
 
     Ctl::FunctionArgPtr argX = fn->inputArg(0);
-    assert(argX->hasDefaultValue() == false);
+    REQUIRE(argX->hasDefaultValue() == false);
 
     // setDefaultValue() on a no-default arg is a harmless no-op.
     argX->setDefaultValue();

@@ -15,7 +15,7 @@
 #include <CtlMetalInterpreter.h>
 #include <Iex.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <iostream>
 #include <string>
 
@@ -40,8 +40,8 @@ testMetalStub()
     const std::string name = interp.deviceName();
     std::cout << "  interpreter deviceName(): \"" << name << "\""
               << std::endl;
-    assert(!name.empty());
-    assert(interp.maxSamples() == (1u << 24));
+    REQUIRE(!name.empty());
+    REQUIRE(interp.maxSamples() == (1u << 24));
 
     bool threw = false;
     try {
@@ -51,7 +51,7 @@ testMetalStub()
     } catch (const IEX_NAMESPACE::BaseExc &) {
         threw = true;
     }
-    assert(threw);
+    REQUIRE(threw);
 
     std::cout << "ok" << std::endl;
 }

@@ -25,7 +25,7 @@
 #include <CtlMetalInterpreter.h>
 #include <CtlMetalShaderCache.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -97,11 +97,11 @@ testDigestStableAndWellFormed()
         Ctl::metalShaderCacheDigest("kernel void k() {}", "k");
     const std::string b =
         Ctl::metalShaderCacheDigest("kernel void k() {}", "k");
-    assert(a == b);
-    assert(a.size() == 16);
+    REQUIRE(a == b);
+    REQUIRE(a.size() == 16);
     for (char c : a) {
         const bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-        assert(hex);
+        REQUIRE(hex);
     }
     std::cout << "  digest stable + 16-hex — ok" << std::endl;
 }
@@ -115,9 +115,9 @@ testDigestSensitivity()
         Ctl::metalShaderCacheDigest("kernel void k() {} // x", "k");
     const std::string nameFlip =
         Ctl::metalShaderCacheDigest("kernel void k() {}", "other");
-    assert(base != srcFlip);
-    assert(base != nameFlip);
-    assert(srcFlip != nameFlip);
+    REQUIRE(base != srcFlip);
+    REQUIRE(base != nameFlip);
+    REQUIRE(srcFlip != nameFlip);
 
     //
     // FNV-1a must not collapse (src, name) boundaries — swapping the
@@ -128,7 +128,7 @@ testDigestSensitivity()
         Ctl::metalShaderCacheDigest("foo", "bar");
     const std::string split2 =
         Ctl::metalShaderCacheDigest("foob", "ar");
-    assert(split1 != split2);
+    REQUIRE(split1 != split2);
     std::cout << "  digest sensitive to src + kernel + split — ok"
               << std::endl;
 }
@@ -145,13 +145,13 @@ testPathEnvOverride()
     const std::string digest = "deadbeefcafef00d";
     const std::string path = Ctl::metalShaderCachePathFor(digest);
 
-    assert(!path.empty());
-    assert(path.find(dir) == 0);
-    assert(path.find(digest + ".binarchive") != std::string::npos);
+    REQUIRE(!path.empty());
+    REQUIRE(path.find(dir) == 0);
+    REQUIRE(path.find(digest + ".binarchive") != std::string::npos);
 
     struct stat st;
-    assert(::stat(dir.c_str(), &st) == 0);
-    assert(S_ISDIR(st.st_mode));
+    REQUIRE(::stat(dir.c_str(), &st) == 0);
+    REQUIRE(S_ISDIR(st.st_mode));
 
     ::unsetenv("CTL_METAL_CACHE_DIR");
     rmrfIfExists(dir);
@@ -164,7 +164,7 @@ testPathDisable()
     ::setenv("CTL_METAL_DISABLE_CACHE", "1", 1);
     const std::string path =
         Ctl::metalShaderCachePathFor("deadbeefcafef00d");
-    assert(path.empty());
+    REQUIRE(path.empty());
     ::unsetenv("CTL_METAL_DISABLE_CACHE");
     std::cout << "  CTL_METAL_DISABLE_CACHE=1 bypass — ok" << std::endl;
 }
@@ -176,7 +176,7 @@ dispatchAddOne(size_t N, std::vector<float> &out)
     interp.loadModule("sc", "sc.ctl", kTrivialKernel);
 
     Ctl::FunctionCallPtr fn = interp.newFunctionCall("sc::addOne");
-    assert(fn);
+    REQUIRE(fn);
 
     const Ctl::FunctionArgPtr &in = fn->inputArg(0);
     float *inData = reinterpret_cast<float *>(in->data());
@@ -205,14 +205,14 @@ testEndToEndCacheFileCreated()
     dispatchAddOne(N, firstOut);
 
     for (size_t i = 0; i < N; ++i)
-        assert(firstOut[i] == static_cast<float>(i) + 1.0f);
+        REQUIRE(firstOut[i] == static_cast<float>(i) + 1.0f);
 
     //
     // First dispatch populated the archive. File must exist, have
     // content, and the directory must hold at least one .binarchive.
     //
     const size_t archivesAfterCold = countBinArchives(dir);
-    assert(archivesAfterCold >= 1);
+    REQUIRE(archivesAfterCold >= 1);
 
     //
     // Second dispatch must succeed against the now-populated cache and
@@ -223,7 +223,7 @@ testEndToEndCacheFileCreated()
     //
     std::vector<float> secondOut;
     dispatchAddOne(N, secondOut);
-    assert(secondOut == firstOut);
+    REQUIRE(secondOut == firstOut);
 
     //
     // Hit path must not clobber / re-emit the archive. A regression where
@@ -231,7 +231,7 @@ testEndToEndCacheFileCreated()
     // regression where we delete-and-rewrite would show a count dip.
     //
     const size_t archivesAfterWarm = countBinArchives(dir);
-    assert(archivesAfterWarm == archivesAfterCold);
+    REQUIRE(archivesAfterWarm == archivesAfterCold);
 
     ::unsetenv("CTL_METAL_CACHE_DIR");
     rmrfIfExists(dir);
@@ -252,14 +252,14 @@ testEndToEndDisableSkipsDisk()
     dispatchAddOne(N, out);
 
     for (size_t i = 0; i < N; ++i)
-        assert(out[i] == static_cast<float>(i) + 1.0f);
+        REQUIRE(out[i] == static_cast<float>(i) + 1.0f);
 
     //
     // Bypass env var must short-circuit before any disk I/O — the
     // directory should not even be created.
     //
     struct stat st;
-    assert(::stat(dir.c_str(), &st) != 0);
+    REQUIRE(::stat(dir.c_str(), &st) != 0);
 
     ::unsetenv("CTL_METAL_DISABLE_CACHE");
     ::unsetenv("CTL_METAL_CACHE_DIR");

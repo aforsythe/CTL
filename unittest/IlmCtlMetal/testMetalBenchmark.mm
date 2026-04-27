@@ -30,7 +30,7 @@
 #include <CtlSimdInterpreter.h>
 
 #include <algorithm>
-#include <cassert>
+#include "testRequire.h"
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -281,9 +281,9 @@ primeInterpreter(Interp &interp,
         interp.loadFile(prog.sourcePath, prog.moduleName);
     }
     fn = interp.newFunctionCall(prog.function);
-    assert(fn);
-    assert(fn->numInputArgs()  == prog.numInputs);
-    assert(fn->numOutputArgs() == prog.numOutputs);
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs()  == prog.numInputs);
+    REQUIRE(fn->numOutputArgs() == prog.numOutputs);
 
     std::mt19937 rng(0xBE1CE17);
     std::uniform_real_distribution<float> d(-2.0f, 2.0f);
@@ -318,7 +318,7 @@ runOneIteration(Interp &interp,
         size_t n = std::min(batch, numSamples - offset);
         for (size_t i = 0; i < fn->numInputArgs(); ++i) {
             Ctl::FunctionArgPtr arg = fn->inputArg(i);
-            assert(arg->isVarying());
+            REQUIRE(arg->isVarying());
             std::memcpy(arg->data(),
                         inputs[i].data() + offset,
                         n * sizeof(float));

@@ -36,7 +36,7 @@
 
 #include <Iex.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -86,7 +86,7 @@ loadAndProbe(Interp &interp,
                       std::string(moduleName) + ".ctl",
                       source);
     Ctl::FunctionCallPtr fn = interp.newFunctionCall(functionName);
-    assert(fn);
+    REQUIRE(fn);
     return fn;
 }
 
@@ -117,8 +117,8 @@ expectAssertThrow(const char *label,
 
     Ctl::FunctionArgPtr aArg = fn->inputArg(0);
     Ctl::FunctionArgPtr out  = fn->outputArg(0);
-    assert(aArg->isVarying());
-    assert(out->isVarying());
+    REQUIRE(aArg->isVarying());
+    REQUIRE(out->isVarying());
 
     fillFloatInput(aArg, n, 0.5f, 0.125f);
 

@@ -29,7 +29,7 @@
 #include <CtlMetalInterpreter.h>
 #include <CtlSimdInterpreter.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -62,16 +62,16 @@ runScalarWrapper(Interp &interp,
 {
     interp.loadFile("nestedVSArrays.ctl", moduleName);
     Ctl::FunctionCallPtr fn = interp.newFunctionCall(functionName);
-    assert(fn);
-    assert(fn->numInputArgs() == 3);
-    assert(fn->numOutputArgs() == 1);
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs() == 3);
+    REQUIRE(fn->numOutputArgs() == 1);
 
     Ctl::FunctionArgPtr rIn = fn->inputArg(0);
     Ctl::FunctionArgPtr gIn = fn->inputArg(1);
     Ctl::FunctionArgPtr bIn = fn->inputArg(2);
     Ctl::FunctionArgPtr sOut = fn->outputArg(0);
-    assert(rIn->isVarying() && gIn->isVarying() && bIn->isVarying());
-    assert(sOut->isVarying());
+    REQUIRE(rIn->isVarying() && gIn->isVarying() && bIn->isVarying());
+    REQUIRE(sOut->isVarying());
 
     const size_t n = samples.size();
     for (size_t i = 0; i < n; ++i) {
@@ -104,7 +104,7 @@ checkParity(const char *label,
             const std::vector<float> &cpuOut,
             const std::vector<float> &gpuOut)
 {
-    assert(cpuOut.size() == gpuOut.size());
+    REQUIRE(cpuOut.size() == gpuOut.size());
     size_t diverged = 0;
     size_t firstDiff = SIZE_MAX;
     for (size_t i = 0; i < cpuOut.size(); ++i) {

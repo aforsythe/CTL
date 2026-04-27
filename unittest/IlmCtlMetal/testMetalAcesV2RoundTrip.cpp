@@ -32,7 +32,7 @@
 #include <CtlMetalInterpreter.h>
 #include <CtlSimdInterpreter.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -99,9 +99,9 @@ runRoundTrip(Interp &interp, const std::vector<Rgb> &samples)
 {
     interp.loadFile("aces_combined.ctl", "aces_combined");
     Ctl::FunctionCallPtr fn = interp.newFunctionCall("::roundtrip_main");
-    assert(fn);
-    assert(fn->numInputArgs() == 3);
-    assert(fn->numOutputArgs() == 3);
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs() == 3);
+    REQUIRE(fn->numOutputArgs() == 3);
 
     const size_t n = samples.size();
 
@@ -112,8 +112,8 @@ runRoundTrip(Interp &interp, const std::vector<Rgb> &samples)
     Ctl::FunctionArgPtr gOut = fn->outputArg(1);
     Ctl::FunctionArgPtr bOut = fn->outputArg(2);
 
-    assert(rIn->isVarying() && gIn->isVarying() && bIn->isVarying());
-    assert(rOut->isVarying() && gOut->isVarying() && bOut->isVarying());
+    REQUIRE(rIn->isVarying() && gIn->isVarying() && bIn->isVarying());
+    REQUIRE(rOut->isVarying() && gOut->isVarying() && bOut->isVarying());
 
     for (size_t i = 0; i < n; ++i) {
         std::memcpy(rIn->data() + i * sizeof(float),
@@ -185,8 +185,8 @@ testMetalAcesV2RoundTrip()
         throw;
     }
 
-    assert(cpuOut.size() == gpuOut.size());
-    assert(cpuOut.size() == 3 * numSamples);
+    REQUIRE(cpuOut.size() == gpuOut.size());
+    REQUIRE(cpuOut.size() == 3 * numSamples);
 
     int64_t maxUlp   = 0;
     size_t  diverged = 0;

@@ -19,7 +19,7 @@
 #include <CtlSymbolTable.h>
 #include <CtlType.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <iostream>
 #include <sstream>
 
@@ -48,17 +48,17 @@ testMetalLContext()
     Ctl::MetalInterpreter interp;
 
     Ctl::MetalModule module(interp, "testModule", "testModule.ctl");
-    assert(module.codegen().source().find("#include <metal_stdlib>")
+    REQUIRE(module.codegen().source().find("#include <metal_stdlib>")
            != std::string::npos);
 
     Ctl::SymbolTable symtab;
     std::istringstream file("");
     Ctl::MetalLContext lcontext(file, &module, symtab);
 
-    assert(lcontext.metalModule() == &module);
+    REQUIRE(lcontext.metalModule() == &module);
 
     Ctl::DataTypePtr floatT = lcontext.newFloatType();
-    assert(floatT);
+    REQUIRE(floatT);
 
     lcontext.newStackFrame();
 
@@ -73,19 +73,19 @@ testMetalLContext()
     Ctl::MetalDataAddr *mr0 = asMetalAddr(r0);
     Ctl::MetalDataAddr *mv0 = asMetalAddr(v0);
     Ctl::MetalDataAddr *mv1 = asMetalAddr(v1);
-    assert(mp0 && mp1 && mr0 && mv0 && mv1);
+    REQUIRE(mp0 && mp1 && mr0 && mv0 && mv1);
 
-    assert(mp0->mslName() == "param0");
-    assert(mp1->mslName() == "param1");
-    assert(mr0->mslName() == "ret0");
-    assert(mv0->mslName() == "var0");
-    assert(mv1->mslName() == "var1");
+    REQUIRE(mp0->mslName() == "param0");
+    REQUIRE(mp1->mslName() == "param1");
+    REQUIRE(mr0->mslName() == "ret0");
+    REQUIRE(mv0->mslName() == "var0");
+    REQUIRE(mv1->mslName() == "var1");
 
     lcontext.newStackFrame();
 
     Ctl::AddrPtr p0b = lcontext.parameterAddr(floatT);
     Ctl::MetalDataAddr *mp0b = asMetalAddr(p0b);
-    assert(mp0b && mp0b->mslName() == "param0");
+    REQUIRE(mp0b && mp0b->mslName() == "param0");
 
     std::cout << "ok" << std::endl;
 }

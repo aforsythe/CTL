@@ -23,7 +23,7 @@
 #include <CtlMetalInterpreter.h>
 #include <CtlSimdInterpreter.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -67,12 +67,12 @@ runEval(Ctl::Interpreter &interp,
     interp.loadFile(sourcePath, moduleName);
     Ctl::FunctionCallPtr fn =
         interp.newFunctionCall("testMetalScatterKernel::eval");
-    assert(fn);
-    assert(fn->numInputArgs() == 3);
-    assert(fn->numOutputArgs() == 3);
+    REQUIRE(fn);
+    REQUIRE(fn->numInputArgs() == 3);
+    REQUIRE(fn->numOutputArgs() == 3);
 
     const size_t N = rIn.size();
-    assert(gIn.size() == N && bIn.size() == N);
+    REQUIRE(gIn.size() == N && bIn.size() == N);
 
     //
     // Populate the three input args from the host-side vectors. Every

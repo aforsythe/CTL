@@ -29,7 +29,7 @@
 
 #include <CtlMetalSidecarCache.h>
 
-#include <cassert>
+#include "testRequire.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -113,7 +113,7 @@ setMtime(const std::string &path, time_t sec, long nsec)
     ts[0].tv_sec = sec;  ts[0].tv_nsec = nsec;   // atime
     ts[1].tv_sec = sec;  ts[1].tv_nsec = nsec;   // mtime
     int rc = ::utimensat(AT_FDCWD, path.c_str(), ts, 0);
-    assert(rc == 0);
+    REQUIRE(rc == 0);
 }
 
 //
@@ -128,7 +128,7 @@ struct Env
     explicit Env(const char *tag) : root(tempRoot(tag))
     {
         rmrf(root);
-        assert(mkdirP(root));
+        REQUIRE(mkdirP(root));
         ::setenv("HOME", root.c_str(), 1);
         ::unsetenv("XDG_CACHE_HOME");
     }
@@ -177,10 +177,10 @@ testRoundTrip()
     }
 
     Ctl::MetalSidecarCache c2;
-    assert(c2.tryLoad(src));
-    assert(c2.isValid());
-    assert(lookupEq(c2, "a::x", "hello"));
-    assert(lookupEq(c2, "a::y", std::string("\x00\x01\x02\x03", 4)));
+    REQUIRE(c2.tryLoad(src));
+    REQUIRE(c2.isValid());
+    REQUIRE(lookupEq(c2, "a::x", "hello"));
+    REQUIRE(lookupEq(c2, "a::y", std::string("\x00\x01\x02\x03", 4)));
     std::cout << "  round-trip write → tryLoad → lookup — ok" << std::endl;
 }
 
@@ -209,7 +209,7 @@ testVersionMismatch()
         // re-open and overwrite with a v1 header.
         //
         Ctl::MetalSidecarCache tmp;
-        assert(tmp.tryLoad(src));
+        REQUIRE(tmp.tryLoad(src));
     }
     //
     // The file lives at `$HOME/Library/Caches/ctl-metal-sidecar/<hash>.bin`
@@ -218,7 +218,7 @@ testVersionMismatch()
     //
     const std::string dir = e.root + "/Library/Caches/ctl-metal-sidecar";
     DIR *d = opendir(dir.c_str());
-    assert(d);
+    REQUIRE(d);
     std::string binPath;
     while (struct dirent *de = readdir(d)) {
         const char *ext = std::strrchr(de->d_name, '.');
@@ -228,7 +228,7 @@ testVersionMismatch()
         }
     }
     closedir(d);
-    assert(!binPath.empty());
+    REQUIRE(!binPath.empty());
 
     //
     // Overwrite bytes 4..7 with 1 (little-endian native uint32). We
@@ -242,8 +242,8 @@ testVersionMismatch()
     f.close();
 
     Ctl::MetalSidecarCache c;
-    assert(!c.tryLoad(src));
-    assert(!c.isValid());
+    REQUIRE(!c.tryLoad(src));
+    REQUIRE(!c.isValid());
     std::cout << "  v1 file rejected on version check — ok" << std::endl;
 }
 
@@ -265,11 +265,11 @@ testMtimeSecondsStale()
     // Must invalidate.
     //
     struct stat st;
-    assert(::stat(src.c_str(), &st) == 0);
+    REQUIRE(::stat(src.c_str(), &st) == 0);
     setMtime(src, st.st_mtime + 10, 0);
 
     Ctl::MetalSidecarCache c;
-    assert(!c.tryLoad(src));
+    REQUIRE(!c.tryLoad(src));
     std::cout << "  mtime-s bump invalidates — ok" << std::endl;
 }
 
@@ -303,7 +303,7 @@ testMtimeNanosecondsStale()
     setMtime(src, 1700000000, 12345);
 
     Ctl::MetalSidecarCache c;
-    assert(!c.tryLoad(src));
+    REQUIRE(!c.tryLoad(src));
     std::cout << "  mtime-ns bump invalidates — ok" << std::endl;
 }
 
@@ -325,7 +325,7 @@ testSizeStale()
     // value the write stamps so only size differs.
     //
     struct stat st;
-    assert(::stat(src.c_str(), &st) == 0);
+    REQUIRE(::stat(src.c_str(), &st) == 0);
     time_t keepS = st.st_mtime;
 #if defined(__APPLE__)
     long keepNs = st.st_mtimespec.tv_nsec;
@@ -338,7 +338,7 @@ testSizeStale()
     setMtime(src, keepS, keepNs);
 
     Ctl::MetalSidecarCache c;
-    assert(!c.tryLoad(src));
+    REQUIRE(!c.tryLoad(src));
     std::cout << "  size mismatch invalidates — ok" << std::endl;
 }
 
@@ -372,19 +372,19 @@ testMultiTopMerge()
     //
     Ctl::MetalSidecarCache c;
     const bool hitA = c.tryLoad(a);
-    assert(hitA);
-    assert(c.isValid());
-    assert(lookupEq(c, "A::alpha", "AAAA"));
+    REQUIRE(hitA);
+    REQUIRE(c.isValid());
+    REQUIRE(lookupEq(c, "A::alpha", "AAAA"));
 
     const bool hitB = c.tryLoad(b);
-    assert(!hitB);            // no file for B
-    assert(!c.isValid());     // latest preload's verdict
+    REQUIRE(!hitB);            // no file for B
+    REQUIRE(!c.isValid());     // latest preload's verdict
 
     //
     // The bug: preload(B) would clear `_bytes` here. Post-fix, A's
     // bytes must still be looked up after the miss.
     //
-    assert(lookupEq(c, "A::alpha", "AAAA"));
+    REQUIRE(lookupEq(c, "A::alpha", "AAAA"));
     std::cout << "  A=HIT → B=MISS keeps A's bytes — ok" << std::endl;
 }
 
@@ -401,7 +401,7 @@ testRealpathCanonicalization()
     Env e("realpath");
     const std::string src = e.source("real.ctl", "// r\n");
     const std::string link = e.root + "/link.ctl";
-    assert(::symlink(src.c_str(), link.c_str()) == 0);
+    REQUIRE(::symlink(src.c_str(), link.c_str()) == 0);
 
     Ctl::MetalSidecarCache c;
     c.markSource(src);
@@ -416,7 +416,7 @@ testRealpathCanonicalization()
     std::string binPath;
     const std::string dir = e.root + "/Library/Caches/ctl-metal-sidecar";
     DIR *d = opendir(dir.c_str());
-    assert(d);
+    REQUIRE(d);
     while (struct dirent *de = readdir(d)) {
         const char *ext = std::strrchr(de->d_name, '.');
         if (ext && !std::strcmp(ext, ".bin")) {
@@ -425,16 +425,16 @@ testRealpathCanonicalization()
         }
     }
     closedir(d);
-    assert(!binPath.empty());
+    REQUIRE(!binPath.empty());
 
     std::ifstream is(binPath, std::ios::binary);
     uint32_t magic = 0, version = 0, sourceCount = 0;
     is.read(reinterpret_cast<char *>(&magic), 4);
     is.read(reinterpret_cast<char *>(&version), 4);
     is.read(reinterpret_cast<char *>(&sourceCount), 4);
-    assert(magic == 0x434D5343u);
-    assert(version == 2u);
-    assert(sourceCount == 1u);
+    REQUIRE(magic == 0x434D5343u);
+    REQUIRE(version == 2u);
+    REQUIRE(sourceCount == 1u);
     std::cout << "  symlink + abs dedupe via realpath — ok" << std::endl;
 }
 
@@ -470,7 +470,7 @@ testCorruptFileRecovery()
     //
     const std::string dir = e.root + "/Library/Caches/ctl-metal-sidecar";
     DIR *d = opendir(dir.c_str());
-    assert(d);
+    REQUIRE(d);
     size_t seen = 0;
     while (struct dirent *de = readdir(d)) {
         const char *ext = std::strrchr(de->d_name, '.');
@@ -479,7 +479,7 @@ testCorruptFileRecovery()
         }
     }
     closedir(d);
-    assert(seen == 2);
+    REQUIRE(seen == 2);
 
     //
     // We don't know which .bin belongs to which top without
@@ -488,8 +488,8 @@ testCorruptFileRecovery()
     // cache with A's bytes, then truncate, then tryLoad(b).
     //
     Ctl::MetalSidecarCache c;
-    assert(c.tryLoad(a));
-    assert(lookupEq(c, "A::k", "AAAA"));
+    REQUIRE(c.tryLoad(a));
+    REQUIRE(lookupEq(c, "A::k", "AAAA"));
 
     d = opendir(dir.c_str());
     while (struct dirent *de = readdir(d)) {
@@ -501,12 +501,12 @@ testCorruptFileRecovery()
     }
     closedir(d);
 
-    assert(!c.tryLoad(b));
-    assert(!c.isValid());
+    REQUIRE(!c.tryLoad(b));
+    REQUIRE(!c.isValid());
     //
     // Prior state must survive: A's entry still resolves.
     //
-    assert(lookupEq(c, "A::k", "AAAA"));
+    REQUIRE(lookupEq(c, "A::k", "AAAA"));
     std::cout << "  corrupt-file bail preserves prior state — ok" << std::endl;
 }
 
@@ -534,7 +534,7 @@ testModulePathKey()
     ::setenv("CTL_MODULE_PATH", "/nowhere/beta", 1);
     {
         Ctl::MetalSidecarCache c;
-        assert(!c.tryLoad(src));
+        REQUIRE(!c.tryLoad(src));
     }
 
     //
@@ -545,8 +545,8 @@ testModulePathKey()
     ::setenv("CTL_MODULE_PATH", "/nowhere/alpha", 1);
     {
         Ctl::MetalSidecarCache c;
-        assert(c.tryLoad(src));
-        assert(lookupEq(c, "a::k", "alpha"));
+        REQUIRE(c.tryLoad(src));
+        REQUIRE(lookupEq(c, "a::k", "alpha"));
     }
 
     //
@@ -563,14 +563,14 @@ testModulePathKey()
 
     const std::string dir = e.root + "/Library/Caches/ctl-metal-sidecar";
     DIR *d = opendir(dir.c_str());
-    assert(d);
+    REQUIRE(d);
     size_t binCount = 0;
     while (struct dirent *de = readdir(d)) {
         const char *ext = std::strrchr(de->d_name, '.');
         if (ext && !std::strcmp(ext, ".bin")) ++binCount;
     }
     closedir(d);
-    assert(binCount == 2);
+    REQUIRE(binCount == 2);
 
     ::unsetenv("CTL_MODULE_PATH");
     std::cout << "  CTL_MODULE_PATH folded into cache key — ok" << std::endl;
