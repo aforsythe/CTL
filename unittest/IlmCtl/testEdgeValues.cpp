@@ -199,6 +199,51 @@ testMaskedLoopRespectsBranchMask (SimdInterpreter &interp)
 
 
 void
+testSeededMaskedLoop (SimdInterpreter &interp)
+{
+    cout << "  masked_loop_seeded: condition primed to TRUE for inactive lanes"
+	 << endl;
+
+    // The previous masked_loop test relied on the loop's condition register
+    // being zero for inactive lanes (the natural state from arena init).
+    // The mutation `loopMask[i] = condition[i]` then produced the same
+    // result as `&=` because both gave false for inactive lanes.  This
+    // version primes `keep_going = true` for ALL lanes BEFORE entering
+    // the masked region, so the condition register is true for inactive
+    // lanes — making the mutation observable as a count > 0.
+    FunctionCallPtr fn = interp.newFunctionCall("edge_test::masked_loop_seeded");
+    FunctionArgPtr aArg    = fn->findInputArg("active");
+    FunctionArgPtr seedArg = fn->findInputArg("seed");
+    FunctionArgPtr resArg  = fn->findOutputArg("result");
+    REQUIRE(aArg && seedArg && resArg);
+
+    const size_t N = 8;
+    bool *aData    = (bool*)(aArg->data());
+    int  *seedData = (int*) (seedArg->data());
+    for (size_t i = 0; i < N; ++i)
+    {
+	aData[i]    = (i % 2 == 0);   // alternate active/inactive
+	seedData[i] = 10;             // every lane primes keep_going=true
+    }
+
+    fn->callFunction(N);
+
+    const int *res = (const int*)(resArg->data());
+    for (size_t i = 0; i < N; ++i)
+    {
+	const int expected = aData[i] ? 5 : 0;
+	if (res[i] != expected)
+	{
+	    cerr << "  lane " << i << " active=" << aData[i]
+		 << " seed=" << seedData[i]
+		 << ": expected " << expected << " got " << res[i] << endl;
+	    REQUIRE(false && "masked_loop_seeded: loop ran for inactive lane");
+	}
+    }
+}
+
+
+void
 testNestedBranchMaskHandling (SimdInterpreter &interp)
 {
     cout << "  nested_branch: outer mask must propagate into inner branch"
@@ -358,6 +403,7 @@ testEdgeValues ()
     testArithmetic(interp);
     testCompareBranchWithNaN(interp);
     testMaskedLoopRespectsBranchMask(interp);
+    testSeededMaskedLoop(interp);
     testNestedBranchMaskHandling(interp);
     testMergedBranchAroundOuterMask(interp);
 

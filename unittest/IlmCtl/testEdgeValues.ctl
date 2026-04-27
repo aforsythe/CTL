@@ -58,6 +58,42 @@ masked_loop (input varying int n_in,
 }
 
 void
+masked_loop_seeded (input varying bool active,
+                    input varying int seed,
+                    output varying int result)
+{
+    // Stronger version of masked_loop that primes the loop's condition
+    // register to TRUE for ALL lanes (including inactive ones) BEFORE
+    // entering the masked region.  This forces the SimdLoopInst's
+    // condition[i] to be non-zero for inactive lanes — making the
+    // mutation `loopMask[i] = condition[i]` (instead of `&=`) observable.
+    //
+    // For inactive lanes:
+    //   - `keep_going = (seed > 0)` is assigned with the all-active
+    //     mask before the if(active), so it's TRUE for inactive lanes
+    //     too (when seed > 0)
+    //   - inside the masked while loop, the original code AND-accumulates
+    //     loopMask, so an inactive lane stays masked off
+    //   - the mutation re-evaluates loopMask = condition each iteration,
+    //     so an inactive lane re-enters the body whenever keep_going is
+    //     true — which it is, until the body itself sets it false
+    //
+    // Original output: result == 0 for inactive lanes.
+    // Mutated output:  result == 5 for inactive lanes (loop ran).
+    int counter = 0;
+    bool keep_going = (seed > 0);
+    if (active)
+    {
+        while (keep_going)
+        {
+            counter = counter + 1;
+            keep_going = (counter < 5);
+        }
+    }
+    result = counter;
+}
+
+void
 nested_branch (input varying bool a,
                input varying bool b,
                output varying float r)
