@@ -12,6 +12,7 @@
 #include "testMetalLContext.h"
 
 #include <CtlMetalAddr.h>
+#include <CtlMetalCodegen.h>
 #include <CtlMetalDevice.h>
 #include <CtlMetalInterpreter.h>
 #include <CtlMetalLContext.h>
