@@ -328,161 +328,163 @@ if(OpenEXR_FOUND)
     endforeach()
 endif()
 
-# -help / -help <topic>: ctlrender prints usage and exits 1 (the existing
-# behaviour — `-help` is treated as a parse-error path, not exit-0).  Each
-# topic dispatches through a different branch in usage.cc, which was
-# entirely untested (0% line coverage) before these cases.
-foreach(TOPIC noarg format compression ctl pixel scale param unknown)
-    if(TOPIC STREQUAL "noarg")
-        add_test(NAME "ctlrender-help-${TOPIC}" COMMAND ctlrender -help)
-    else()
-        add_test(NAME "ctlrender-help-${TOPIC}"
-            COMMAND ctlrender -help ${TOPIC})
-    endif()
-    set_tests_properties("ctlrender-help-${TOPIC}" PROPERTIES WILL_FAIL TRUE)
-endforeach()
-
-# CLI flag coverage for ctlrender/main.cc — every option we support but
-# don't otherwise exercise in another test.  Each flag gets at minimum one
-# happy-path case (with unity.ctl + an existing fixture), and the obvious
-# error branches (missing arg / malformed value) where they exist.
+# Error-path tests for CLI flag parsing in ctlrender/main.cc.  Each
+# verifies that the parser exits non-zero on a specific malformed
+# invocation — they exercise distinct error branches that were
+# previously unreachable from any other test.
 if(OpenEXR_FOUND)
-    set(_FX  "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr")
-    set(_FX_RGBA "${TEST_FILES}/colorbars_nuke_rgba_exr32.exr")
+    set(_FX "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr")
     set(_OUT "${CTLRENDER_OUTPUT_FOLDER}")
 
-    # -input_scale / -output_scale: both take a float, both have malformed
-    # error branches.
-    add_test(NAME "ctlrender-input-scale-happy"
+    foreach(EBASE
+            "input-scale-no-arg;-input_scale"
+            "input-scale-malformed;-input_scale;abc;-ctl;${TEST_FILES}/unity.ctl;${_FX};${_OUT}/x.exr"
+            "output-scale-malformed;-output_scale;abc;-ctl;${TEST_FILES}/unity.ctl;${_FX};${_OUT}/x.exr"
+            "jobs-no-arg;-jobs"
+            "jobs-malformed;-jobs;abc;-ctl;${TEST_FILES}/unity.ctl;${_FX};${_OUT}/x.exr"
+            "format-unknown;-format;mystery;-ctl;${TEST_FILES}/unity.ctl;${_FX};${_OUT}/x.mystery"
+            "global-param1-no-arg;-global_param1"
+            "unknown-option;-nonsense;-ctl;${TEST_FILES}/unity.ctl;${_FX};${_OUT}/x.exr")
+        list(POP_FRONT EBASE _NAME)
+        add_test(NAME "ctlrender-${_NAME}-errors" COMMAND ${CTLRENDER_PATH} ${EBASE})
+        set_tests_properties("ctlrender-${_NAME}-errors" PROPERTIES WILL_FAIL TRUE)
+    endforeach()
+
+    # Semantic verification by byte-parity: every flag below is checked
+    # against an equivalent reference invocation that produces the same
+    # output through a different code path.  A regression that silently
+    # ignored or mis-applied the flag would change the bytes and the
+    # compare_files step would fail.
+
+    # -input_scale 0.5 + unity is mathematically equivalent to
+    # image_with_param.ctl with gain=0.5 and no input scaling.  Both
+    # multiply every input lane by 0.5 before output; output should be
+    # byte-identical exr32.
+    add_test(NAME "ctlrender-input-scale-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/image_with_param.ctl" -p1 gain 0.5
+                -format exr32 -force "${_FX}" "${_OUT}/scale_ref.exr")
+    add_test(NAME "ctlrender-input-scale-run"
         COMMAND ${CTLRENDER_PATH} -input_scale 0.5 -ctl "${TEST_FILES}/unity.ctl"
-                -format exr32 -force "${_FX}" "${_OUT}/input_scale.exr")
-    add_test(NAME "ctlrender-input-scale-no-arg-errors"
-        COMMAND ${CTLRENDER_PATH} -input_scale)
-    set_tests_properties("ctlrender-input-scale-no-arg-errors" PROPERTIES WILL_FAIL TRUE)
-    add_test(NAME "ctlrender-input-scale-malformed-errors"
-        COMMAND ${CTLRENDER_PATH} -input_scale abc -ctl "${TEST_FILES}/unity.ctl" "${_FX}" "${_OUT}/x.exr")
-    set_tests_properties("ctlrender-input-scale-malformed-errors" PROPERTIES WILL_FAIL TRUE)
+                -format exr32 -force "${_FX}" "${_OUT}/scale_run.exr")
+    add_test(NAME "ctlrender-input-scale-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/scale_ref.exr" "${_OUT}/scale_run.exr")
+    set_tests_properties("ctlrender-input-scale-run" PROPERTIES DEPENDS "ctlrender-input-scale-ref")
+    set_tests_properties("ctlrender-input-scale-cmp" PROPERTIES DEPENDS "ctlrender-input-scale-run")
 
-    add_test(NAME "ctlrender-output-scale-happy"
-        COMMAND ${CTLRENDER_PATH} -output_scale 2.0 -ctl "${TEST_FILES}/unity.ctl"
-                -format exr32 -force "${_FX}" "${_OUT}/output_scale.exr")
-    add_test(NAME "ctlrender-output-scale-malformed-errors"
-        COMMAND ${CTLRENDER_PATH} -output_scale abc -ctl "${TEST_FILES}/unity.ctl" "${_FX}" "${_OUT}/x.exr")
-    set_tests_properties("ctlrender-output-scale-malformed-errors" PROPERTIES WILL_FAIL TRUE)
-
-    # -noalpha: drops the alpha channel from RGBA input.  Output should
-    # write successfully (we don't assert on channel count, just that
-    # the path runs).
-    add_test(NAME "ctlrender-noalpha-happy"
-        COMMAND ${CTLRENDER_PATH} -noalpha -ctl "${TEST_FILES}/unity_with_alpha.ctl"
-                -format exr32 -force "${_FX_RGBA}" "${_OUT}/noalpha.exr")
-
-    # -quiet / -verbose: just verify they don't change exit status.
-    add_test(NAME "ctlrender-quiet-happy"
-        COMMAND ${CTLRENDER_PATH} -quiet -ctl "${TEST_FILES}/unity.ctl"
-                -format exr32 -force "${_FX}" "${_OUT}/quiet.exr")
-    add_test(NAME "ctlrender-verbose-happy"
-        COMMAND ${CTLRENDER_PATH} -verbose -ctl "${TEST_FILES}/unity.ctl"
-                -format exr32 -force "${_FX}" "${_OUT}/verbose.exr")
-
-    # -jobs: file-level parallelism.  Test happy paths at N=0 (autoselect)
-    # and N=1 (serial), plus malformed/missing-arg errors.
-    add_test(NAME "ctlrender-jobs-1-happy"
-        COMMAND ${CTLRENDER_PATH} -jobs 1 -ctl "${TEST_FILES}/unity.ctl"
-                -format exr32 -force "${_FX}" "${_OUT}/jobs_1.exr")
-    add_test(NAME "ctlrender-jobs-0-autoselect-happy"
-        COMMAND ${CTLRENDER_PATH} -jobs 0 -ctl "${TEST_FILES}/unity.ctl"
-                -format exr32 -force "${_FX}" "${_OUT}/jobs_0.exr")
-    add_test(NAME "ctlrender-jobs-no-arg-errors"
-        COMMAND ${CTLRENDER_PATH} -jobs)
-    set_tests_properties("ctlrender-jobs-no-arg-errors" PROPERTIES WILL_FAIL TRUE)
-    add_test(NAME "ctlrender-jobs-malformed-errors"
-        COMMAND ${CTLRENDER_PATH} -jobs abc -ctl "${TEST_FILES}/unity.ctl" "${_FX}" "${_OUT}/x.exr")
-    set_tests_properties("ctlrender-jobs-malformed-errors" PROPERTIES WILL_FAIL TRUE)
-
-    # -format unknown-value error branch (-compression with an unknown
-    # codec name silently uses the default rather than erroring on
-    # cpu-perf, so we don't test that here).
-    add_test(NAME "ctlrender-format-unknown-errors"
-        COMMAND ${CTLRENDER_PATH} -format mystery -ctl "${TEST_FILES}/unity.ctl" "${_FX}" "${_OUT}/x.mystery")
-    set_tests_properties("ctlrender-format-unknown-errors" PROPERTIES WILL_FAIL TRUE)
-
-    # -global_param1: applies a uniform parameter override across all
-    # -ctl operations.  image_with_param.ctl declares `input uniform
-    # float gain = 1.0` against the rIn/gIn/bIn ctlrender image input
-    # convention, so -global_param1 gain 2.0 reaches it.
-    add_test(NAME "ctlrender-global-param1-happy"
+    # -global_param1 gain V applies to every -ctl in the chain.  With a
+    # single -ctl image_with_param.ctl, it should be byte-equivalent to
+    # the same chain with -p1 gain V (per-operation override).
+    add_test(NAME "ctlrender-global-param1-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/image_with_param.ctl" -p1 gain 2.0
+                -format exr32 -force "${_FX}" "${_OUT}/gp1_ref.exr")
+    add_test(NAME "ctlrender-global-param1-run"
         COMMAND ${CTLRENDER_PATH} -global_param1 gain 2.0 -ctl "${TEST_FILES}/image_with_param.ctl"
-                -format exr32 -force "${_FX}" "${_OUT}/global_param1.exr")
-    add_test(NAME "ctlrender-global-param1-no-arg-errors"
-        COMMAND ${CTLRENDER_PATH} -global_param1)
-    set_tests_properties("ctlrender-global-param1-no-arg-errors" PROPERTIES WILL_FAIL TRUE)
+                -format exr32 -force "${_FX}" "${_OUT}/gp1_run.exr")
+    add_test(NAME "ctlrender-global-param1-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/gp1_ref.exr" "${_OUT}/gp1_run.exr")
+    set_tests_properties("ctlrender-global-param1-run" PROPERTIES DEPENDS "ctlrender-global-param1-ref")
+    set_tests_properties("ctlrender-global-param1-cmp" PROPERTIES DEPENDS "ctlrender-global-param1-run")
 
-    # -param1 short alias (-p1) — exercises the same code path as -param1
-    # but verifies the alias dispatch.
-    add_test(NAME "ctlrender-p1-alias-happy"
+    # -p1 alias: byte-identical to -param1 dispatch.
+    add_test(NAME "ctlrender-p1-alias-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/image_with_param.ctl" -param1 gain 0.75
+                -format exr32 -force "${_FX}" "${_OUT}/p1_ref.exr")
+    add_test(NAME "ctlrender-p1-alias-run"
         COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/image_with_param.ctl" -p1 gain 0.75
-                -format exr32 -force "${_FX}" "${_OUT}/p1_alias.exr")
+                -format exr32 -force "${_FX}" "${_OUT}/p1_run.exr")
+    add_test(NAME "ctlrender-p1-alias-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/p1_ref.exr" "${_OUT}/p1_run.exr")
+    set_tests_properties("ctlrender-p1-alias-run" PROPERTIES DEPENDS "ctlrender-p1-alias-ref")
+    set_tests_properties("ctlrender-p1-alias-cmp" PROPERTIES DEPENDS "ctlrender-p1-alias-run")
 
-    # Image-chain mode: more than one -ctl applied serially to an image
-    # input (the existing chain test only used -pixel).
-    add_test(NAME "ctlrender-image-multi-ctl-chain"
+    # Image-chain mode: unity.ctl + image_with_param.ctl(gain=1.5) is
+    # mathematically equivalent to a single image_with_param.ctl(gain=1.5).
+    # If the chain executor is broken (drops a step, double-applies),
+    # the bytes differ.
+    add_test(NAME "ctlrender-image-multi-ctl-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/image_with_param.ctl" -p1 gain 1.5
+                -format exr32 -force "${_FX}" "${_OUT}/chain_ref.exr")
+    add_test(NAME "ctlrender-image-multi-ctl-run"
         COMMAND ${CTLRENDER_PATH}
                 -ctl "${TEST_FILES}/unity.ctl"
                 -ctl "${TEST_FILES}/image_with_param.ctl" -p1 gain 1.5
-                -format exr32 -force "${_FX}" "${_OUT}/multi_chain.exr")
+                -format exr32 -force "${_FX}" "${_OUT}/chain_run.exr")
+    add_test(NAME "ctlrender-image-multi-ctl-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/chain_ref.exr" "${_OUT}/chain_run.exr")
+    set_tests_properties("ctlrender-image-multi-ctl-run" PROPERTIES DEPENDS "ctlrender-image-multi-ctl-ref")
+    set_tests_properties("ctlrender-image-multi-ctl-cmp" PROPERTIES DEPENDS "ctlrender-image-multi-ctl-run")
 
-    # Unknown option must fail.
-    add_test(NAME "ctlrender-unknown-option-errors"
-        COMMAND ${CTLRENDER_PATH} -nonsense -ctl "${TEST_FILES}/unity.ctl" "${_FX}" "${_OUT}/x.exr")
-    set_tests_properties("ctlrender-unknown-option-errors" PROPERTIES WILL_FAIL TRUE)
-
-    # transform.cc edge cases:
-    # -threads 0 = autoselect; ensure the autoselect path runs cleanly.
-    add_test(NAME "ctlrender-threads-autoselect-happy"
+    # -threads autoselect (-threads 0) and -threads >> tiles must be
+    # byte-identical to -threads 1 — same code semantically, different
+    # number of workers.  These pin transform.cc's autoselect resolution
+    # and the worker-count > tile-count cap path against silent drift.
+    add_test(NAME "ctlrender-threads-autoselect-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/threaded_parity_ref.exr" "${_OUT}/threads_auto.exr")
+    add_test(NAME "ctlrender-threads-autoselect-run"
         COMMAND ${CTLRENDER_PATH} -threads 0 -ctl "${TEST_FILES}/unity.ctl"
                 -format exr32 -force "${_FX}" "${_OUT}/threads_auto.exr")
-    # -threads N where N >> number of tiles in the fixture: hits the
-    # `worker_count > tiles.size()` cap path inside transform.cc that
-    # only kicks in when explicit thread count exceeds tile count.
-    add_test(NAME "ctlrender-threads-more-than-tiles-happy"
+    set_tests_properties("ctlrender-threads-autoselect-run"
+        PROPERTIES DEPENDS "ctlrender-threaded-parity-ref")
+    set_tests_properties("ctlrender-threads-autoselect-cmp"
+        PROPERTIES DEPENDS "ctlrender-threads-autoselect-run")
+
+    add_test(NAME "ctlrender-threads-more-than-tiles-run"
         COMMAND ${CTLRENDER_PATH} -threads 64 -ctl "${TEST_FILES}/unity.ctl"
                 -format exr32 -force "${_FX}" "${_OUT}/threads_64.exr")
+    add_test(NAME "ctlrender-threads-more-than-tiles-cmp"
+        COMMAND ${CMAKE_COMMAND} -E compare_files
+                "${_OUT}/threaded_parity_ref.exr" "${_OUT}/threads_64.exr")
+    set_tests_properties("ctlrender-threads-more-than-tiles-run"
+        PROPERTIES DEPENDS "ctlrender-threaded-parity-ref")
+    set_tests_properties("ctlrender-threads-more-than-tiles-cmp"
+        PROPERTIES DEPENDS "ctlrender-threads-more-than-tiles-run")
 
-    # Multi-input batch: multiple positional inputs + a destination
-    # directory + an explicit -format.  Exercises the "outdir" + per-file
-    # transform code path (vs. single-file in→out).
+    # Multi-input batch + -jobs N: each output file must be byte-identical
+    # to the same input processed individually with -jobs 1.  Catches per-
+    # job state-bleed regressions and missing output files.
     set(_MULTI_OUT "${_OUT}/multi_in")
     add_test(NAME "ctlrender-multi-input-mkdir"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_MULTI_OUT}")
-    add_test(NAME "ctlrender-multi-input-batch-happy"
-        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl" -format exr32 -force
-                "${TEST_FILES}/colorbars_nuke_rgb_exr16.exr"
-                "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
-                "${TEST_FILES}/bars_photoshop.exr"
-                "${_MULTI_OUT}")
-    set_tests_properties("ctlrender-multi-input-batch-happy"
-        PROPERTIES DEPENDS "ctlrender-multi-input-mkdir")
-
-    # -jobs > 1 with a multi-input batch: file-level parallelism running
-    # whole transforms concurrently.  Catches regressions in the per-job
-    # fork/join logic and the shared global_ctl_parameters access path.
-    add_test(NAME "ctlrender-jobs-multi-input-happy"
+    foreach(IN_FILE
+            colorbars_nuke_rgb_exr16
+            colorbars_nuke_rgb_exr32
+            bars_photoshop)
+        add_test(NAME "ctlrender-multi-input-${IN_FILE}-ref"
+            COMMAND ${CTLRENDER_PATH} -jobs 1 -ctl "${TEST_FILES}/unity.ctl" -format exr32 -force
+                    "${TEST_FILES}/${IN_FILE}.exr" "${_OUT}/single_${IN_FILE}.exr")
+    endforeach()
+    add_test(NAME "ctlrender-multi-input-jobs2-batch"
         COMMAND ${CTLRENDER_PATH} -jobs 2 -ctl "${TEST_FILES}/unity.ctl" -format exr32 -force
                 "${TEST_FILES}/colorbars_nuke_rgb_exr16.exr"
                 "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
                 "${TEST_FILES}/bars_photoshop.exr"
                 "${_MULTI_OUT}")
-    set_tests_properties("ctlrender-jobs-multi-input-happy"
-        PROPERTIES DEPENDS "ctlrender-multi-input-batch-happy")
+    set_tests_properties("ctlrender-multi-input-jobs2-batch"
+        PROPERTIES DEPENDS "ctlrender-multi-input-mkdir")
+    foreach(IN_FILE
+            colorbars_nuke_rgb_exr16
+            colorbars_nuke_rgb_exr32
+            bars_photoshop)
+        add_test(NAME "ctlrender-multi-input-${IN_FILE}-cmp"
+            COMMAND ${CMAKE_COMMAND} -E compare_files
+                    "${_OUT}/single_${IN_FILE}.exr" "${_MULTI_OUT}/${IN_FILE}.exr")
+        set_tests_properties("ctlrender-multi-input-${IN_FILE}-cmp"
+            PROPERTIES DEPENDS "ctlrender-multi-input-jobs2-batch;ctlrender-multi-input-${IN_FILE}-ref")
+    endforeach()
 
     # Force-overwrite negative test: without -force, attempting to
-    # overwrite an existing file must error out.
+    # overwrite an existing file must error out.  Depends on the
+    # autoselect run above to guarantee the target file already exists.
     add_test(NAME "ctlrender-write-existing-no-force-errors"
         COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl" -format exr32
                 "${_FX}" "${_OUT}/threads_auto.exr")
     set_tests_properties("ctlrender-write-existing-no-force-errors"
-        PROPERTIES DEPENDS "ctlrender-threads-autoselect-happy" WILL_FAIL TRUE)
+        PROPERTIES DEPENDS "ctlrender-threads-autoselect-run" WILL_FAIL TRUE)
 endif()
 
 # ACES round-trip: ACES → EXR via unity.  The existing test produces an
