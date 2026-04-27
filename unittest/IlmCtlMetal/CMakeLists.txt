@@ -223,3 +223,84 @@ if(TARGET ctlrender-metal AND (TARGET OpenEXR::OpenEXR OR TARGET OpenEXR::IlmImf
 				--seed 0)
 	endif()
 endif()
+
+# CLI flag coverage for ctlrender-metal.  Reuses fixtures from the
+# sibling ctlrender directory.
+if(TARGET ctlrender-metal AND (TARGET OpenEXR::OpenEXR OR TARGET OpenEXR::IlmImf))
+    set(_RM "$<TARGET_FILE:ctlrender-metal>")
+    set(_FX "${CMAKE_CURRENT_SOURCE_DIR}/../ctlrender/colorbars_nuke_rgb_exr32.exr")
+    set(_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../ctlrender")
+    set(_OUT "${CMAKE_CURRENT_BINARY_DIR}/cli")
+    add_test(NAME "ctlrender-metal-cli-mkdir"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_OUT}")
+
+    # GPU-only flag error paths.  Each must exit non-zero.
+    add_test(NAME "ctlrender-metal-parity-ulp-no-arg-errors"
+        COMMAND ${_RM} --parity-check-ulp)
+    set_tests_properties("ctlrender-metal-parity-ulp-no-arg-errors"
+        PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME "ctlrender-metal-parity-ulp-malformed-errors"
+        COMMAND ${_RM} --parity-check-ulp abc -ctl "${_TEST_DIR}/unity.ctl"
+                "${_FX}" "${_OUT}/x.exr")
+    set_tests_properties("ctlrender-metal-parity-ulp-malformed-errors"
+        PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME "ctlrender-metal-parity-ulp-negative-errors"
+        COMMAND ${_RM} --parity-check-ulp -1 -ctl "${_TEST_DIR}/unity.ctl"
+                "${_FX}" "${_OUT}/x.exr")
+    set_tests_properties("ctlrender-metal-parity-ulp-negative-errors"
+        PROPERTIES WILL_FAIL TRUE)
+
+    # --benchmark mode: exits 0 and prints summary.  Pin both via
+    # PASS_REGULAR_EXPRESSION on a known progress marker.
+    add_test(NAME "ctlrender-metal-benchmark-runs"
+        COMMAND ${_RM} --benchmark 3
+                -ctl "${_TEST_DIR}/unity.ctl" "${_FX}")
+    set_tests_properties("ctlrender-metal-benchmark-runs" PROPERTIES
+        PASS_REGULAR_EXPRESSION "iter")
+
+    # -pixel mode through the Metal backend: same expected output as
+    # the CPU path, since the math collapses to a no-op + identity for
+    # a unity transform.
+    add_test(NAME "ctlrender-metal-pixel-rgba"
+        COMMAND ${_RM} -ctl "${_TEST_DIR}/pixel_chain_a.ctl"
+                -pixel 0.5,0.5,0.5,1.0)
+    set_tests_properties("ctlrender-metal-pixel-rgba" PROPERTIES
+        PASS_REGULAR_EXPRESSION
+        "R=0\\.7500000[ \\t]+G=0\\.5000000[ \\t]+B=0\\.5000000[ \\t]+A=1\\.0000000")
+
+    # -pipeline / --no-pipeline run cleanly to exit 0.  They drive a
+    # real runtime mode change so their outputs are NOT byte-equal —
+    # asserting parity here would be wrong.
+    add_test(NAME "ctlrender-metal-pipeline-happy"
+        COMMAND ${_RM} -pipeline -ctl "${_TEST_DIR}/unity.ctl"
+                -format exr32 -force "${_FX}" "${_OUT}/pipeline.exr")
+    set_tests_properties("ctlrender-metal-pipeline-happy"
+        PROPERTIES DEPENDS "ctlrender-metal-cli-mkdir")
+    add_test(NAME "ctlrender-metal-no-pipeline-happy"
+        COMMAND ${_RM} --no-pipeline -ctl "${_TEST_DIR}/unity.ctl"
+                -format exr32 -force "${_FX}" "${_OUT}/no_pipeline.exr")
+    set_tests_properties("ctlrender-metal-no-pipeline-happy"
+        PROPERTIES DEPENDS "ctlrender-metal-cli-mkdir")
+
+    # ctlrender-metal at -threads N must produce byte-identical output
+    # across N (the Metal backend is deterministic per-pipeline).
+    add_test(NAME "ctlrender-metal-threads-1-ref"
+        COMMAND ${_RM} -threads 1 -ctl "${_TEST_DIR}/unity.ctl"
+                -format exr32 -force "${_FX}" "${_OUT}/t1.exr")
+    set_tests_properties("ctlrender-metal-threads-1-ref"
+        PROPERTIES DEPENDS "ctlrender-metal-cli-mkdir")
+    foreach(N 2 4 8)
+        add_test(NAME "ctlrender-metal-threads-${N}-run"
+            COMMAND ${_RM} -threads ${N} -ctl "${_TEST_DIR}/unity.ctl"
+                    -format exr32 -force "${_FX}" "${_OUT}/t${N}.exr")
+        add_test(NAME "ctlrender-metal-threads-${N}-cmp"
+            COMMAND ${CMAKE_COMMAND} -E compare_files
+                    "${_OUT}/t1.exr" "${_OUT}/t${N}.exr")
+        set_tests_properties("ctlrender-metal-threads-${N}-run"
+            PROPERTIES DEPENDS "ctlrender-metal-cli-mkdir")
+        set_tests_properties("ctlrender-metal-threads-${N}-cmp"
+            PROPERTIES DEPENDS
+                "ctlrender-metal-threads-1-ref;ctlrender-metal-threads-${N}-run")
+    endforeach()
+
+endif()
