@@ -25,7 +25,7 @@
 
 #include <iostream>
 #include <vector>
-#include <cassert>
+#include <testRequire.h>
 #include <cstring>
 
 using namespace Ctl;
@@ -46,8 +46,8 @@ testGatherDistinctIndices (SimdInterpreter &interp)
     FunctionCallPtr fn = interp.newFunctionCall("vai_test::gather");
     FunctionArgPtr  idx = fn->findInputArg("idx");
     FunctionArgPtr  out = fn->findOutputArg("result");
-    assert(idx);
-    assert(out);
+    REQUIRE(idx);
+    REQUIRE(out);
 
     const size_t N = 64;
     int *idxData = (int*)(idx->data());
@@ -65,7 +65,7 @@ testGatherDistinctIndices (SimdInterpreter &interp)
 	    cerr << "lane " << i << ": expected " << expected
 		 << " got " << outData[i] << " (idx=" << idxData[i] << ")"
 		 << endl;
-	    assert(false && "varying gather produced wrong per-lane value");
+	    REQUIRE(false && "varying gather produced wrong per-lane value");
 	}
     }
 }
@@ -83,8 +83,8 @@ testGatherUniformIndex (SimdInterpreter &interp)
     FunctionCallPtr fn = interp.newFunctionCall("vai_test::gather");
     FunctionArgPtr  idx = fn->findInputArg("idx");
     FunctionArgPtr  out = fn->findOutputArg("result");
-    assert(idx);
-    assert(out);
+    REQUIRE(idx);
+    REQUIRE(out);
 
     const size_t N = 32;
     int *idxData = (int*)(idx->data());
@@ -96,7 +96,7 @@ testGatherUniformIndex (SimdInterpreter &interp)
     const float *outData = (const float*)(out->data());
     for (size_t i = 0; i < N; ++i)
     {
-	assert(outData[i] == kSquares[5]);
+	REQUIRE(outData[i] == kSquares[5]);
     }
 }
 
@@ -114,9 +114,9 @@ testGatherWithUniformOffset (SimdInterpreter &interp)
     FunctionArgPtr  idx    = fn->findInputArg("idx");
     FunctionArgPtr  offset = fn->findInputArg("offset");
     FunctionArgPtr  out    = fn->findOutputArg("result");
-    assert(idx);
-    assert(offset);
-    assert(out);
+    REQUIRE(idx);
+    REQUIRE(offset);
+    REQUIRE(out);
 
     const size_t N = 16;
     int *idxData = (int*)(idx->data());
@@ -136,7 +136,7 @@ testGatherWithUniformOffset (SimdInterpreter &interp)
 	{
 	    cerr << "lane " << i << ": expected " << expected
 		 << " got " << outData[i] << endl;
-	    assert(false && "gather_with_offset produced wrong per-lane value");
+	    REQUIRE(false && "gather_with_offset produced wrong per-lane value");
 	}
     }
 }

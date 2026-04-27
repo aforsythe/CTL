@@ -28,7 +28,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <cassert>
+#include <testRequire.h>
 
 using namespace Ctl;
 using namespace std;
@@ -48,7 +48,7 @@ testStringConstructor ()
     }
     catch (const CtlExc &e)
     {
-	assert(string(e.what()) == msg);
+	REQUIRE(string(e.what()) == msg);
     }
 }
 
@@ -67,8 +67,8 @@ testStringstreamConstructor ()
     catch (const CtlExc &e)
     {
 	const string what = e.what();
-	assert(what.find("stream-built error 7") != string::npos);
-	assert(what.find("3.14") != string::npos);
+	REQUIRE(what.find("stream-built error 7") != string::npos);
+	REQUIRE(what.find("3.14") != string::npos);
     }
 }
 
@@ -87,65 +87,65 @@ testSubclassDispatch ()
     try { throw MaxInstExc(string("max inst hit at depth 12")); }
     catch (const MaxInstExc &e)
     {
-	assert(string(e.what()) == "max inst hit at depth 12");
+	REQUIRE(string(e.what()) == "max inst hit at depth 12");
     }
     // MaxInstExc as CtlExc base — inheritance preserved.
     try { throw MaxInstExc(string("for base catch")); }
     catch (const CtlExc &e)
     {
-	assert(string(e.what()) == "for base catch");
+	REQUIRE(string(e.what()) == "for base catch");
     }
 
     // IndexOutOfRangeExc.
     try { throw IndexOutOfRangeExc(string("index 5 of 3")); }
     catch (const IndexOutOfRangeExc &e)
     {
-	assert(string(e.what()) == "index 5 of 3");
+	REQUIRE(string(e.what()) == "index 5 of 3");
     }
 
     // Three sibling stack exceptions — RTTI must distinguish them
     // from each other even though they share the macro body.
     try { throw StackOverflowExc(string("overflow")); }
-    catch (const StackOverflowExc &e) { assert(string(e.what()) == "overflow"); }
-    catch (...) { assert(false && "StackOverflowExc not caught as itself"); }
+    catch (const StackOverflowExc &e) { REQUIRE(string(e.what()) == "overflow"); }
+    catch (...) { REQUIRE(false && "StackOverflowExc not caught as itself"); }
 
     try { throw StackUnderflowExc(string("underflow")); }
-    catch (const StackUnderflowExc &e) { assert(string(e.what()) == "underflow"); }
-    catch (...) { assert(false && "StackUnderflowExc not caught as itself"); }
+    catch (const StackUnderflowExc &e) { REQUIRE(string(e.what()) == "underflow"); }
+    catch (...) { REQUIRE(false && "StackUnderflowExc not caught as itself"); }
 
     try { throw StackLogicExc(string("logic error")); }
-    catch (const StackLogicExc &e) { assert(string(e.what()) == "logic error"); }
-    catch (...) { assert(false && "StackLogicExc not caught as itself"); }
+    catch (const StackLogicExc &e) { REQUIRE(string(e.what()) == "logic error"); }
+    catch (...) { REQUIRE(false && "StackLogicExc not caught as itself"); }
 
     // Remaining subclasses share the same macro-generated body, so a
     // representative sample is enough to pin the codegen.
     try { throw LoadModuleExc(string("module load")); }
     catch (const LoadModuleExc &e) { (void)e; }
-    catch (...) { assert(false && "LoadModuleExc not caught as itself"); }
+    catch (...) { REQUIRE(false && "LoadModuleExc not caught as itself"); }
 
     try { throw AbortExc(string("aborted")); }
     catch (const AbortExc &e) { (void)e; }
-    catch (...) { assert(false && "AbortExc not caught as itself"); }
+    catch (...) { REQUIRE(false && "AbortExc not caught as itself"); }
 
     try { throw InvalidSizeExc(string("bad size")); }
     catch (const InvalidSizeExc &e) { (void)e; }
-    catch (...) { assert(false && "InvalidSizeExc not caught as itself"); }
+    catch (...) { REQUIRE(false && "InvalidSizeExc not caught as itself"); }
 
     try { throw ArrayMismatchExc(string("mismatch")); }
     catch (const ArrayMismatchExc &e) { (void)e; }
-    catch (...) { assert(false && "ArrayMismatchExc not caught as itself"); }
+    catch (...) { REQUIRE(false && "ArrayMismatchExc not caught as itself"); }
 
     try { throw StructAccessExc(string("struct")); }
     catch (const StructAccessExc &e) { (void)e; }
-    catch (...) { assert(false && "StructAccessExc not caught as itself"); }
+    catch (...) { REQUIRE(false && "StructAccessExc not caught as itself"); }
 
     try { throw RuntimeExc(string("compile-time issue")); }
     catch (const RuntimeExc &e) { (void)e; }
-    catch (...) { assert(false && "RuntimeExc not caught as itself"); }
+    catch (...) { REQUIRE(false && "RuntimeExc not caught as itself"); }
 
     try { throw DatatypeExc(string("type conv")); }
     catch (const DatatypeExc &e) { (void)e; }
-    catch (...) { assert(false && "DatatypeExc not caught as itself"); }
+    catch (...) { REQUIRE(false && "DatatypeExc not caught as itself"); }
 }
 
 
@@ -159,7 +159,7 @@ testStdExceptionInteroperability ()
     try { throw IndexOutOfRangeExc(string("ioor")); }
     catch (const std::exception &e)
     {
-	assert(string(e.what()) == "ioor");
+	REQUIRE(string(e.what()) == "ioor");
     }
 }
 
@@ -181,8 +181,8 @@ testStringstreamSubclass ()
     catch (const IndexOutOfRangeExc &e)
     {
 	const string what = e.what();
-	assert(what.find("idx=42") != string::npos);
-	assert(what.find("size=16") != string::npos);
+	REQUIRE(what.find("idx=42") != string::npos);
+	REQUIRE(what.find("size=16") != string::npos);
     }
 }
 
