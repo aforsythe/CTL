@@ -199,6 +199,100 @@ testMaskedLoopRespectsBranchMask (SimdInterpreter &interp)
 
 
 void
+testNestedBranchMaskHandling (SimdInterpreter &interp)
+{
+    cout << "  nested_branch: outer mask must propagate into inner branch"
+	 << endl;
+
+    // Lanes filtered out by `if (a)` must NOT be touched by the inner
+    // `if (b) ... else ...`.  A SimdBranchInst mutation that constructs
+    // the inner trueMask/falseMask without ANDing the outer mask
+    // would let the inner branch run on those lanes too — observable
+    // because the pre-branch sentinel `r = -1.0` would get overwritten.
+    FunctionCallPtr fn = interp.newFunctionCall("edge_test::nested_branch");
+    FunctionArgPtr aArg = fn->findInputArg("a");
+    FunctionArgPtr bArg = fn->findInputArg("b");
+    FunctionArgPtr rArg = fn->findOutputArg("r");
+    REQUIRE(aArg && bArg && rArg);
+
+    // Cover all 4 (a, b) combinations:
+    const size_t N = 4;
+    bool aIn[N] = {true,  false, true,  false};
+    bool bIn[N] = {true,  true,  false, false};
+    // Expected:    inner   keep    inner   keep
+    //              true    senti   false   senti
+    float expected[N] = {1.0f, -1.0f, 0.0f, -1.0f};
+
+    bool *aData = (bool*)(aArg->data());
+    bool *bData = (bool*)(bArg->data());
+    for (size_t i = 0; i < N; ++i)
+    {
+	aData[i] = aIn[i];
+	bData[i] = bIn[i];
+    }
+
+    fn->callFunction(N);
+
+    const float *rOut = (const float*)(rArg->data());
+    for (size_t i = 0; i < N; ++i)
+    {
+	if (rOut[i] != expected[i])
+	{
+	    cerr << "  lane " << i << " a=" << aIn[i] << " b=" << bIn[i]
+		 << ": expected " << expected[i] << " got " << rOut[i]
+		 << endl;
+	    REQUIRE(false && "nested_branch: outer mask leaked into inner");
+	}
+    }
+}
+
+
+void
+testMergedBranchAroundOuterMask (SimdInterpreter &interp)
+{
+    cout << "  merge_branch: branch-as-expression must respect outer mask"
+	 << endl;
+
+    // merge_inner is an if-expression that returns 7 or 9.  Wrapping it
+    // in an outer `if (a)` means the merge runs only for lanes where
+    // a=true.  Lanes where a=false must keep r = -1.0 from the pre-
+    // branch initialisation.
+    FunctionCallPtr fn = interp.newFunctionCall("edge_test::merge_branch");
+    FunctionArgPtr aArg = fn->findInputArg("a");
+    FunctionArgPtr bArg = fn->findInputArg("b");
+    FunctionArgPtr rArg = fn->findOutputArg("r");
+    REQUIRE(aArg && bArg && rArg);
+
+    const size_t N = 4;
+    bool aIn[N] = {true, false, true,  false};
+    bool bIn[N] = {true, true,  false, false};
+    float expected[N] = {7.0f, -1.0f, 9.0f, -1.0f};
+
+    bool *aData = (bool*)(aArg->data());
+    bool *bData = (bool*)(bArg->data());
+    for (size_t i = 0; i < N; ++i)
+    {
+	aData[i] = aIn[i];
+	bData[i] = bIn[i];
+    }
+
+    fn->callFunction(N);
+
+    const float *rOut = (const float*)(rArg->data());
+    for (size_t i = 0; i < N; ++i)
+    {
+	if (rOut[i] != expected[i])
+	{
+	    cerr << "  lane " << i << " a=" << aIn[i] << " b=" << bIn[i]
+		 << ": expected " << expected[i] << " got " << rOut[i]
+		 << endl;
+	    REQUIRE(false && "merge_branch: outer mask leaked into merge");
+	}
+    }
+}
+
+
+void
 testCompareBranchWithNaN (SimdInterpreter &interp)
 {
     cout << "  compare_branch(a,b): NaN comparisons must be false (IEEE-754)"
@@ -264,6 +358,8 @@ testEdgeValues ()
     testArithmetic(interp);
     testCompareBranchWithNaN(interp);
     testMaskedLoopRespectsBranchMask(interp);
+    testNestedBranchMaskHandling(interp);
+    testMergedBranchAroundOuterMask(interp);
 
     cout << "ok" << endl;
 }
