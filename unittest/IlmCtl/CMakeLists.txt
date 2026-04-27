@@ -10,6 +10,7 @@ set(SOURCES
 	testSimdRegAddr.cpp
 	testUniformBoolDefault.cpp
 	testVarying.cpp
+	testVaryingArrayIndex.cpp
 	testVaryingLookup.cpp
 	testVaryingReturn.cpp
 )
@@ -73,6 +74,7 @@ file(COPY
 	testStruct.ctl
 	testTypes.ctl
 	testVarying.ctl
+	testVaryingArrayIndex.ctl
 	testVaryingLookup.ctl
 	testVaryingReturn.ctl
 	testVSArrays.ctl
