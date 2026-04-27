@@ -205,3 +205,21 @@ if(TARGET ctlrender-metal AND (TARGET OpenEXR::OpenEXR OR TARGET OpenEXR::IlmImf
 			-DJOBS_REQUESTED=4
 			-P ${CMAKE_CURRENT_SOURCE_DIR}/run_jobs_clamp_test.cmake)
 endif()
+
+# Property-based CPU vs Metal parity: 8 randomly-generated CTL programs
+# through ctlrender-metal -parity-check, bit-exact tolerance.  Catches
+# divergences in code patterns the hand-picked parity fixtures miss.
+# Larger sweeps run manually via the script.
+if(TARGET ctlrender-metal AND (TARGET OpenEXR::OpenEXR OR TARGET OpenEXR::IlmImf))
+	find_package(Python3 COMPONENTS Interpreter)
+	if(Python3_FOUND)
+		add_test(NAME "ctlrender-metal-property-parity-smoke"
+			COMMAND ${Python3_EXECUTABLE}
+				"${PROJECT_SOURCE_DIR}/tools/property_test_metal_parity.py"
+				--ctlrender $<TARGET_FILE:ctlrender-metal>
+				--input    "${CMAKE_CURRENT_SOURCE_DIR}/../ctlrender/colorbars_nuke_rgb_exr32.exr"
+				--workdir  "${CMAKE_CURRENT_BINARY_DIR}/property_parity_smoke"
+				--count 8
+				--seed 0)
+	endif()
+endif()
