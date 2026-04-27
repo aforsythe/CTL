@@ -27,6 +27,21 @@ add_custom_target(ctlrender-build-time-make-directory ALL
 
 set(TEST_FILES "${PROJECT_SOURCE_DIR}/unittest/ctlrender")
 
+# Helper: emits a deterministic gradient EXR of arbitrary size.  Used by
+# the parallel float->half coverage tests below to materialise a fixture
+# above the parallel-path threshold without checking in a binary blob.
+if(OpenEXR_FOUND)
+    add_executable(gen_large_fixture gen_large_fixture.cpp)
+    target_link_libraries(gen_large_fixture
+        PRIVATE
+            $<$<TARGET_EXISTS:OpenEXR::OpenEXR>:OpenEXR::OpenEXR>
+            $<$<TARGET_EXISTS:Imath::Imath>:Imath::Imath>
+            $<$<TARGET_EXISTS:Imath::Half>:Imath::Half>
+            $<$<TARGET_EXISTS:OpenEXR::IlmImf>:OpenEXR::IlmImf>
+            $<$<TARGET_EXISTS:IlmBase::Imath>:IlmBase::Imath>
+            $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>)
+endif()
+
 foreach(J tiff8 tiff16 tiff32 dpx8 dpx10 dpx12 dpx16)
     foreach(I  bars_cinepaint_10.dpx bars_nuke_10_be.dpx bars_nuke_10_le.dpx bars_nuke_12_be.dpx bars_nuke_12_le.dpx bars_nuke_16_be.dpx bars_nuke_16_le.dpx bars_nuke_8_be.dpx bars_nuke_8_le.dpx bars_photoshop_16_be_interleaved.tif bars_photoshop_16_be_planar.tif bars_photoshop_16_le_interleaved.tif bars_photoshop_16_le_planar.tif bars_photoshop_32_be_interleaved.tif bars_photoshop_32_be_planar.tif bars_photoshop_32_le_interleaved.tif bars_photoshop_32_le_planar.tif bars_photoshop_8_be_interleaved.tif bars_photoshop_8_be_planar.tif bars_photoshop_8_le_interleaved.tif bars_photoshop_8_le_planar.tif)
         # Get extension from ${J}
@@ -562,6 +577,64 @@ if(OpenEXR_FOUND)
                 --workdir  "${_OUT}/property_smoke"
                 --count 8
                 --seed 0)
+
+        # Parallel float->half coverage.  exr_file.cc's parallel
+        # conversion only fires above kMinToThread = 128 KiB of floats
+        # (~131072 elements).  None of the checked-in fixtures are
+        # that large, so the parallel path was untested in CI.  Build
+        # a small generator (linked against OpenEXR) that emits a 512x512x3
+        # (786K float) fixture at test time.
+        set(_LARGE_EXR "${_OUT}/large_512x512.exr")
+        add_test(NAME "ctlrender-large-fixture-gen"
+            COMMAND $<TARGET_FILE:gen_large_fixture>
+                "${_LARGE_EXR}" 512 512)
+
+        add_test(NAME "ctlrender-parallel-half-ref"
+            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                    -format exr16 -force -threads 1
+                    "${_LARGE_EXR}"
+                    "${_OUT}/large_half_serial.exr")
+        set_tests_properties("ctlrender-parallel-half-ref"
+            PROPERTIES DEPENDS "ctlrender-large-fixture-gen")
+
+        # -threads 8 forces the parallel float->half path: input has
+        # 512*512*3 = 786432 floats, well above the 131072 threshold,
+        # so the worker pool is spawned.  Output must be byte-identical
+        # to the serial reference (the commit message for the parallel
+        # path explicitly claims "byte-identical to a serial loop").
+        add_test(NAME "ctlrender-parallel-half-run-t8"
+            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                    -format exr16 -force -threads 8
+                    "${_LARGE_EXR}"
+                    "${_OUT}/large_half_t8.exr")
+        add_test(NAME "ctlrender-parallel-half-cmp-t8"
+            COMMAND ${CMAKE_COMMAND} -E compare_files
+                    "${_OUT}/large_half_serial.exr"
+                    "${_OUT}/large_half_t8.exr")
+        set_tests_properties("ctlrender-parallel-half-run-t8"
+            PROPERTIES DEPENDS "ctlrender-large-fixture-gen")
+        set_tests_properties("ctlrender-parallel-half-cmp-t8"
+            PROPERTIES DEPENDS
+                "ctlrender-parallel-half-ref;ctlrender-parallel-half-run-t8")
+
+        # Same again at -threads 4 — different worker count, must
+        # still be byte-identical (work-stealing distributes chunks
+        # deterministically because output positions are determined by
+        # `begin` not by which thread claimed them).
+        add_test(NAME "ctlrender-parallel-half-run-t4"
+            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                    -format exr16 -force -threads 4
+                    "${_LARGE_EXR}"
+                    "${_OUT}/large_half_t4.exr")
+        add_test(NAME "ctlrender-parallel-half-cmp-t4"
+            COMMAND ${CMAKE_COMMAND} -E compare_files
+                    "${_OUT}/large_half_serial.exr"
+                    "${_OUT}/large_half_t4.exr")
+        set_tests_properties("ctlrender-parallel-half-run-t4"
+            PROPERTIES DEPENDS "ctlrender-large-fixture-gen")
+        set_tests_properties("ctlrender-parallel-half-cmp-t4"
+            PROPERTIES DEPENDS
+                "ctlrender-parallel-half-ref;ctlrender-parallel-half-run-t4")
     endif()
 endif()
 
