@@ -199,6 +199,49 @@ add_test(NAME "ctlrender-pixel-too-few-errors"
     COMMAND ctlrender -ctl "${TEST_FILES}/pixel_chain_a.ctl" -pixel 0.1,0.2)
 set_tests_properties("ctlrender-pixel-too-few-errors" PROPERTIES WILL_FAIL TRUE)
 
+# -pixel + -param1: uniform parameter override on the single-pixel path.
+# pixel_with_param.ctl scales R by `scale` (default 1.0).  Default test
+# verifies the default propagates; override test verifies -param1 reaches
+# the pixel path the same way it reaches the image path.
+add_test(NAME "ctlrender-pixel-param-default"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_with_param.ctl"
+        -pixel 0.5,0.6,0.7,1.0)
+set_tests_properties("ctlrender-pixel-param-default" PROPERTIES
+    PASS_REGULAR_EXPRESSION "R=0\\.5000000[ \\t]+G=0\\.6000000[ \\t]+B=0\\.7000000[ \\t]+A=1\\.0000000")
+
+add_test(NAME "ctlrender-pixel-param-override"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_with_param.ctl"
+        -param1 scale 2.0
+        -pixel 0.5,0.6,0.7,1.0)
+set_tests_properties("ctlrender-pixel-param-override" PROPERTIES
+    PASS_REGULAR_EXPRESSION "R=1\\.0000000[ \\t]+G=0\\.6000000[ \\t]+B=0\\.7000000[ \\t]+A=1\\.0000000")
+
+# -pixel HDR-range inputs: negative and large positive values must pass
+# through the SIMD interpreter unclipped.
+add_test(NAME "ctlrender-pixel-hdr-negative"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_chain_a.ctl"
+        -pixel -0.5,0.6,0.7,1.0)
+set_tests_properties("ctlrender-pixel-hdr-negative" PROPERTIES
+    PASS_REGULAR_EXPRESSION "R=-0\\.2500000[ \\t]+G=0\\.6000000[ \\t]+B=0\\.7000000[ \\t]+A=1\\.0000000")
+
+add_test(NAME "ctlrender-pixel-hdr-large"
+    COMMAND ctlrender
+        -ctl "${TEST_FILES}/pixel_chain_a.ctl"
+        -pixel 10.0,0.6,0.7,1.0)
+set_tests_properties("ctlrender-pixel-hdr-large" PROPERTIES
+    PASS_REGULAR_EXPRESSION "R=10\\.2500000[ \\t]+G=0\\.6000000[ \\t]+B=0\\.7000000[ \\t]+A=1\\.0000000")
+
+# Error: -param1 before any -ctl must fail (parser invariant).
+add_test(NAME "ctlrender-pixel-param-before-ctl-errors"
+    COMMAND ctlrender
+        -param1 scale 2.0
+        -ctl "${TEST_FILES}/pixel_with_param.ctl"
+        -pixel 0.5,0.6,0.7,1.0)
+set_tests_properties("ctlrender-pixel-param-before-ctl-errors" PROPERTIES WILL_FAIL TRUE)
+
 # Phase B: tile-parallel dispatch must produce byte-identical output for
 # any -threads N on a fixture that spans multiple tiles (maxSamples=4096,
 # so >4096 pixels). Runs the same transform at several thread counts and
@@ -227,3 +270,60 @@ if(OpenEXR_FOUND)
     endforeach()
 endif()
 
+# exr16 (half) output threaded parity: the float->half conversion in
+# exr_file.cc has its own work-stealing parallelization.  The fixture is
+# below the kMinToThread threshold so the parallel path itself only fires
+# on larger inputs, but this matrix still pins serial-vs-threaded byte
+# parity through the whole exr16 write pipeline (interpreter threading,
+# format conversion, OpenEXR compression).
+if(OpenEXR_FOUND)
+    set(EXR16_PARITY_REF "${CTLRENDER_OUTPUT_FOLDER}/exr16_parity_ref.exr")
+    add_test(NAME "ctlrender-exr16-threaded-parity-ref"
+        COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                -format exr16 -force -threads 1
+                "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
+                "${EXR16_PARITY_REF}")
+    foreach(N 2 4 8)
+        set(OUT "${CTLRENDER_OUTPUT_FOLDER}/exr16_parity_t${N}.exr")
+        add_test(NAME "ctlrender-exr16-threaded-parity-t${N}-run"
+            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                    -format exr16 -force -threads ${N}
+                    "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
+                    "${OUT}")
+        add_test(NAME "ctlrender-exr16-threaded-parity-t${N}-cmp"
+            COMMAND ${CMAKE_COMMAND} -E compare_files
+                    "${EXR16_PARITY_REF}" "${OUT}")
+        set_tests_properties("ctlrender-exr16-threaded-parity-t${N}-run"
+            PROPERTIES DEPENDS "ctlrender-exr16-threaded-parity-ref")
+        set_tests_properties("ctlrender-exr16-threaded-parity-t${N}-cmp"
+            PROPERTIES DEPENDS "ctlrender-exr16-threaded-parity-t${N}-run")
+    endforeach()
+endif()
+
+# -threads × -compression interaction: each compression codec sees a
+# different chunk-size / encoder, and the per-tile pixel batches arrive
+# from worker threads.  Verify byte-identical output across N=1 vs N=4
+# for a representative set of codecs (lossless block, lossless wavelet,
+# lossy DCT).
+if(OpenEXR_FOUND)
+    foreach(C zip zips piz dwaa)
+        set(REF "${CTLRENDER_OUTPUT_FOLDER}/threads_compression_${C}_ref.exr")
+        set(OUT "${CTLRENDER_OUTPUT_FOLDER}/threads_compression_${C}_t4.exr")
+        add_test(NAME "ctlrender-threads-compression-${C}-ref"
+            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                    -format exr32 -force -threads 1 -compression ${C}
+                    "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
+                    "${REF}")
+        add_test(NAME "ctlrender-threads-compression-${C}-t4-run"
+            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
+                    -format exr32 -force -threads 4 -compression ${C}
+                    "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
+                    "${OUT}")
+        add_test(NAME "ctlrender-threads-compression-${C}-t4-cmp"
+            COMMAND ${CMAKE_COMMAND} -E compare_files "${REF}" "${OUT}")
+        set_tests_properties("ctlrender-threads-compression-${C}-t4-run"
+            PROPERTIES DEPENDS "ctlrender-threads-compression-${C}-ref")
+        set_tests_properties("ctlrender-threads-compression-${C}-t4-cmp"
+            PROPERTIES DEPENDS "ctlrender-threads-compression-${C}-t4-run")
+    endforeach()
+endif()
