@@ -40,6 +40,19 @@ if(OpenEXR_FOUND)
             $<$<TARGET_EXISTS:OpenEXR::IlmImf>:OpenEXR::IlmImf>
             $<$<TARGET_EXISTS:IlmBase::Imath>:IlmBase::Imath>
             $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>)
+
+    # Reference generator for the parallel float->half tests.  Runs an
+    # unambiguously-serial conversion in a separate process, so the
+    # result is independent of exr_file.cc's parallel code path.
+    add_executable(gen_serial_half_ref gen_serial_half_ref.cpp)
+    target_link_libraries(gen_serial_half_ref
+        PRIVATE
+            $<$<TARGET_EXISTS:OpenEXR::OpenEXR>:OpenEXR::OpenEXR>
+            $<$<TARGET_EXISTS:Imath::Imath>:Imath::Imath>
+            $<$<TARGET_EXISTS:Imath::Half>:Imath::Half>
+            $<$<TARGET_EXISTS:OpenEXR::IlmImf>:OpenEXR::IlmImf>
+            $<$<TARGET_EXISTS:IlmBase::Imath>:IlmBase::Imath>
+            $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>)
 endif()
 
 foreach(J tiff8 tiff16 tiff32 dpx8 dpx10 dpx12 dpx16)
@@ -589,22 +602,30 @@ if(OpenEXR_FOUND)
             COMMAND $<TARGET_FILE:gen_large_fixture>
                 "${_LARGE_EXR}" 512 512)
 
+        # Reference: SERIAL float->half conversion done in a separate
+        # binary that doesn't go through exr_file.cc's parallel code
+        # path at all.  This is the only way to get a true-serial
+        # reference: ctlrender's `-threads 1` flag controls the
+        # tile-parallel layer, NOT the parallel float->half code, which
+        # always uses hardware_concurrency() workers when the input is
+        # above kMinToThread.  Using compression=none so the byte-
+        # parity comparison sees raw pixel bytes (no codec smoothing
+        # over single-pixel differences).
         add_test(NAME "ctlrender-parallel-half-ref"
-            COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
-                    -format exr16 -force -threads 1
-                    "${_LARGE_EXR}"
-                    "${_OUT}/large_half_serial.exr")
+            COMMAND $<TARGET_FILE:gen_serial_half_ref>
+                "${_LARGE_EXR}"
+                "${_OUT}/large_half_serial.exr"
+                "none")
         set_tests_properties("ctlrender-parallel-half-ref"
             PROPERTIES DEPENDS "ctlrender-large-fixture-gen")
 
-        # -threads 8 forces the parallel float->half path: input has
-        # 512*512*3 = 786432 floats, well above the 131072 threshold,
-        # so the worker pool is spawned.  Output must be byte-identical
-        # to the serial reference (the commit message for the parallel
-        # path explicitly claims "byte-identical to a serial loop").
+        # ctlrender's parallel float->half path must produce byte-
+        # identical output to the serial reference above.  -compression
+        # none so any single-pixel divergence in the parallel path is
+        # observable at the byte level.
         add_test(NAME "ctlrender-parallel-half-run-t8"
             COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
-                    -format exr16 -force -threads 8
+                    -format exr16 -force -compression none -threads 8
                     "${_LARGE_EXR}"
                     "${_OUT}/large_half_t8.exr")
         add_test(NAME "ctlrender-parallel-half-cmp-t8"
@@ -617,13 +638,12 @@ if(OpenEXR_FOUND)
             PROPERTIES DEPENDS
                 "ctlrender-parallel-half-ref;ctlrender-parallel-half-run-t8")
 
-        # Same again at -threads 4 — different worker count, must
-        # still be byte-identical (work-stealing distributes chunks
-        # deterministically because output positions are determined by
-        # `begin` not by which thread claimed them).
+        # Same at -threads 4: different ctlrender tile-parallelism but
+        # same parallel float->half (always hardware_concurrency()).
+        # Must still match the serial reference byte-for-byte.
         add_test(NAME "ctlrender-parallel-half-run-t4"
             COMMAND ${CTLRENDER_PATH} -ctl "${TEST_FILES}/unity.ctl"
-                    -format exr16 -force -threads 4
+                    -format exr16 -force -compression none -threads 4
                     "${_LARGE_EXR}"
                     "${_OUT}/large_half_t4.exr")
         add_test(NAME "ctlrender-parallel-half-cmp-t4"
