@@ -3,29 +3,16 @@
 // SPDX-License-Identifier: BSD-3-Clause
 ///////////////////////////////////////////////////////////////////////////
 
-//
-// Coverage test for SimdReg's array-index reference constructor —
-// the variant `SimdReg(SimdReg &original, const SimdReg &indices,
-// const SimdBoolMask &mask, size_t arrayElementSize, size_t arraySize,
-// size_t regSize, ...)` which testSimdRegAddr.cpp could not exercise
-// directly because it requires interpreter machinery (an indices
-// register with valid offsets and an active SimdBoolMask).
-//
-// Strategy: load a CTL fixture with `result = lut[idx]` where `idx` is
-// varying.  The SIMD interpreter must use the array-index ref ctor
-// per-instruction to gather from the constant array.  Verify per-lane
-// outputs match a known squares table; correctness implies the gather
-// path computed correct per-lane offsets into the source register's
-// buffer.
-//
+// Exercises SimdReg's array-index reference constructor, which
+// requires interpreter machinery to set up (a SimdReg of indices and
+// an active SimdBoolMask) and so can't be driven from C++ alone.
 
 #include <CtlSimdInterpreter.h>
 #include <CtlFunctionCall.h>
 #include <testVaryingArrayIndex.h>
+#include <testRequire.h>
 
 #include <iostream>
-#include <vector>
-#include <testRequire.h>
 #include <cstring>
 
 using namespace Ctl;

@@ -3,38 +3,17 @@
 // SPDX-License-Identifier: BSD-3-Clause
 ///////////////////////////////////////////////////////////////////////////
 
-//
-// Direct C++ unit tests for SimdReg, SimdBoolMask, SimdArena, SimdDataAddr.
-//
-// IlmCtlTest's other suites are CTL-program-level: they load source, run
-// it through the interpreter, and assert on outputs.  That covers happy
-// paths but skips ownership/lifecycle/pool corners of the SIMD register
-// classes that the vectorized interpreter (Phase B+) introduced.  This
-// file constructs registers and arenas directly and exercises:
-//
-//   - SimdReg heap and arena allocation, with and without zeroInit
-//   - createInArena / isArenaOwned / destroy
-//   - setVarying transitions in both directions, lane[0] preservation
-//   - operator[] varying read/write
-//   - struct-member reference register: writes through the ref propagate
-//     to the underlying owner, both varying and non-varying offsets
-//   - SimdBoolMask non-varying/varying ctors, setVarying transitions,
-//     and pool exhaustion past kCacheMax
-//   - SimdArena alignment, reset+reuse, multi-chunk growth
-//   - SimdDataAddr both ctors, copy, assignment, and print() branches
-//
-
 #include <CtlSimdReg.h>
 #include <CtlSimdAddr.h>
 #include <CtlSimdArena.h>
 #include <testSimdRegAddr.h>
+#include <testRequire.h>
 
 #include <iostream>
 #include <sstream>
 #include <vector>
 #include <cstdint>
 #include <cstring>
-#include <testRequire.h>
 
 using namespace Ctl;
 using namespace std;

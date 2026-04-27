@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
-"""Property-based parity test: random CTL programs through ctlrender,
-vector vs scalar paths must produce byte-identical EXR output.
-
-Generates N random CTL programs from a controlled grammar (function
-signature matches ctlrender's rIn/gIn/bIn convention; bodies are
-small arithmetic expressions over inputs and uniform params).  For
-each, runs ctlrender twice — once with -threads 1 (single-tile, no
-parallel dispatch) and once with -threads 4 (multi-tile, vector
-worker pool) — then byte-compares the EXR output files.
-
-A divergence between the two runs means the SIMD interpreter and the
-parallel dispatch are not preserving exact reproducibility, which is
-a class of bug hand-written tests systematically miss because they
-only cover the patterns the author thought to enumerate.
+"""Generate random CTL programs and assert ctlrender produces
+byte-identical output at -threads 1 vs -threads N.
 
 Usage:
     tools/property_test_simd_parity.py \\

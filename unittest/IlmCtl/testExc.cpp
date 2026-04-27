@@ -3,24 +3,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 ///////////////////////////////////////////////////////////////////////////
 
-//
-// Direct C++ tests for the CtlExc.{h,cpp} exception hierarchy.  Pre-
-// existing tests never construct or throw these classes from C++ —
-// CtlExc.cpp had 0% line coverage — so a regression in the constructor
-// overloads or the macro-generated subclasses would slip through CI
-// silently.
-//
-// Note on scope: these tests intentionally exercise only the std::string
-// and std::stringstream constructor variants, which are the paths the
-// interpreter itself uses (`THROW(IndexOutOfRangeExc, "..."`) wraps the
-// stringstream form via Iex's THROW macro).  The printf-style variadic
-// constructor + _explain() formatter path turns out to crash
-// deterministically inside vsnprintf -> localeconv_l on Apple Silicon
-// when given a non-literal format with %-specifiers — likely a latent
-// va_list ABI issue that's never been hit because no caller in
-// lib/IlmCtl* uses that constructor with format args.  Documented but
-// not exercised here; fixing it is a separate task.
-//
+// Scope: only the std::string and std::stringstream constructor
+// variants — the paths the interpreter itself takes (Iex::THROW wraps
+// the stringstream form).  The printf-style variadic ctor +
+// _explain() formatter crashes deterministically inside vsnprintf ->
+// localeconv_l on Apple Silicon: a latent va_list ABI bug never hit
+// because no caller in lib/IlmCtl* uses format args.  Untested here.
 
 #include <CtlExc.h>
 #include <testExc.h>

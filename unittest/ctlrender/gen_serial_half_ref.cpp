@@ -3,25 +3,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 ///////////////////////////////////////////////////////////////////////////
 
+// Why a separate binary rather than `ctlrender -threads 1`: ctlrender's
+// -threads flag controls the tile-parallel layer only; exr_file.cc's
+// float->half always uses hardware_concurrency() workers above
+// kMinToThread.  A true-serial reference has to come from outside
+// that code path entirely.
 //
-// Reference generator for the parallel float->half coverage tests.
-//
-// Reads an input float EXR, runs an UNAMBIGUOUSLY-SERIAL float->half
-// conversion (no atomics, no threads, no chunks), and writes the half
-// EXR.  Used as the reference for byte-parity comparison against
-// ctlrender's parallel float->half code in exr_file.cc.
-//
-// Why a separate helper instead of `ctlrender -threads 1`?  The
-// `-threads N` flag controls ctlrender's tile-parallel layer, NOT
-// exr_file.cc's float->half code path.  exr_file.cc's parallel code
-// activates whenever (1) is_half output AND (2) total floats >=
-// kMinToThread (128 KiB), regardless of -threads.  So the only way
-// to get a true-serial reference is to do the conversion in a
-// separate program that doesn't use the parallel code path.
-//
-// Usage:
-//   gen_serial_half_ref <input.exr> <output.exr> [compression]
-//
+// Usage: gen_serial_half_ref <input.exr> <output.exr> [compression]
 
 #include <cstdio>
 #include <cstdlib>
@@ -70,7 +58,6 @@ main (int argc, char *argv[])
 	const int height = dw.max.y - dw.min.y + 1;
 	const size_t n = static_cast<size_t>(width) * height;
 
-	// Read RGB float into linear buffers.
 	std::vector<float> rF(n), gF(n), bF(n);
 	Imf::FrameBuffer rfb;
 	rfb.insert("R", Imf::Slice(Imf::FLOAT, (char*)rF.data(),
@@ -82,9 +69,6 @@ main (int argc, char *argv[])
 	in.setFrameBuffer(rfb);
 	in.readPixels(dw.min.y, dw.max.y);
 
-	// SERIAL float->half conversion.  Single thread, single loop, no
-	// atomics or chunking.  This is the reference behaviour: every
-	// position MUST get assigned exactly once.
 	std::vector<half> rH(n), gH(n), bH(n);
 	for (size_t i = 0; i < n; ++i)
 	{
@@ -93,7 +77,6 @@ main (int argc, char *argv[])
 	    bH[i] = half(bF[i]);
 	}
 
-	// Write half EXR with the chosen compression.
 	Imf::Header outHdr(width, height);
 	outHdr.channels().insert("R", Imf::Channel(Imf::HALF));
 	outHdr.channels().insert("G", Imf::Channel(Imf::HALF));

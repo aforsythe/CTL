@@ -9,18 +9,9 @@
 #include <cstdio>
 #include <cstdlib>
 
-// REQUIRE(cond) — runtime check that survives Release/NDEBUG builds.
-//
-// CI builds the project under -DCMAKE_BUILD_TYPE=Release (PGO etc.),
-// which #defines NDEBUG and makes <cassert>'s assert() expand to (void)0.
-// That silently neutralises every test in this directory that relies on
-// assert(), turning them into "did the binary crash?" checks rather than
-// "did the assertion hold?" checks.  Mutation testing surfaced this:
-// mutations that change observable behaviour passed every assert()-only
-// test in Release.
-//
-// REQUIRE() always evaluates and aborts on failure, regardless of NDEBUG.
-//
+// REQUIRE(cond): runtime check that fires under NDEBUG (where assert()
+// expands to (void)0).  Use in test code that needs to catch failures
+// in Release/PGO builds, which is what CI runs by default.
 #define REQUIRE(cond)                                                   \
     do {                                                                \
         if (!(cond)) {                                                  \

@@ -3,21 +3,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 ///////////////////////////////////////////////////////////////////////////
 
+// Emit an RGB FLOAT EXR with a deterministic gradient.  Used to build
+// parallel-half test fixtures larger than the 128KiB checked-in EXRs
+// can provide.  NO_COMPRESSION so the bytes are stable across runs.
 //
-// Generate a deterministic gradient EXR fixture of arbitrary size.  Used
-// by the parallel float->half coverage tests in this directory: the
-// parallel path in exr_file.cc only fires above kMinToThread = 128 KiB
-// of floats, and every checked-in EXR fixture in this directory is well
-// below that threshold.  Rather than commit a large binary fixture,
-// generate one at build/test time so the parallel write code is
-// actually exercised.
-//
-// Usage:
-//   gen_large_fixture <output.exr> <width> <height>
-//
-// Output is RGB FLOAT, NO_COMPRESSION (binary-deterministic across
-// runs and platforms — important for the byte-parity comparison).
-//
+// Usage: gen_large_fixture <output.exr> <width> <height>
 
 #include <cstdio>
 #include <cstdlib>
@@ -51,7 +41,6 @@ main (int argc, char *argv[])
     const size_t n = static_cast<size_t>(width) * static_cast<size_t>(height);
     std::vector<float> r(n), g(n), b(n);
 
-    // Deterministic gradient.  Same dimensions => identical bytes.
     const float invMaxX = (width  > 1) ? 1.0f / float(width  - 1) : 0.0f;
     const float invMaxY = (height > 1) ? 1.0f / float(height - 1) : 0.0f;
     for (int y = 0; y < height; ++y)
