@@ -546,6 +546,23 @@ if(OpenEXR_FOUND)
                 "${_FX}" "${_OUT}/threads_auto.exr")
     set_tests_properties("ctlrender-write-existing-no-force-errors"
         PROPERTIES DEPENDS "ctlrender-threads-autoselect-run" WILL_FAIL TRUE)
+
+    # Property-based smoke test: 8 randomly-generated CTL programs run
+    # through ctlrender at -threads 1 vs -threads 4 must produce byte-
+    # identical EXR output.  The full sweep (--count 100+) is meant to
+    # be invoked manually via the script directly; this CI smoke entry
+    # uses a small fixed-seed count so it runs in <2s.
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_FOUND)
+        add_test(NAME "ctlrender-property-vector-parity-smoke"
+            COMMAND ${Python3_EXECUTABLE}
+                "${PROJECT_SOURCE_DIR}/tools/property_test_simd_parity.py"
+                --ctlrender "${CTLRENDER_PATH}"
+                --input    "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
+                --workdir  "${_OUT}/property_smoke"
+                --count 8
+                --seed 0)
+    endif()
 endif()
 
 # ACES round-trip: ACES → EXR via unity.  The existing test produces an
