@@ -2,6 +2,7 @@
 
 #include <half.h>
 
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
