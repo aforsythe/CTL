@@ -79,8 +79,8 @@ gate scheme. These flags set env vars the SnapshotOracle reads directly:
   per-test `writable: true` gate, mismatches get overwritten instead of
   failing.
 - `--update-snapshots=force` sets `CTL_TEST_UPDATE_SNAPSHOTS=force`.
-  Equivalent to `=1` in current behavior but kept as a distinct token so
-  future releases can add "also overwrite read-only snapshots" semantics.
+  Equivalent to `=1` today; kept as a distinct token in case
+  "also overwrite read-only snapshots" semantics are added later.
 - `--allow-new-snapshots` sets `CTL_TEST_ALLOW_NEW_SNAPSHOTS=1`. Needed
   the *first* time a snapshot is recorded.
 

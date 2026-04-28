@@ -168,7 +168,7 @@ OracleSpec parseOracle(const std::string& yamlPath, const YAML::Node& n) {
         }
     }
     if (formCount != 1) {
-        fail(yamlPath, n, "oracle requires exactly one form; v0.5 supports: inline, csv, exr, snapshot");
+        fail(yamlPath, n, "oracle requires exactly one form: inline, csv, exr, snapshot");
     }
     return o;
 }
@@ -206,7 +206,7 @@ ImageSpec parseImage(const std::string& yamlPath, const YAML::Node& n) {
         }
         if (u == "half") {
             fail(yamlPath, n["ulp_precision"],
-                 "image.ulp_precision: half is not yet supported in v1.0 "
+                 "image.ulp_precision: half is not yet supported "
                  "(use 'float' and convert tolerances accordingly)");
         }
         s.ulpPrecision = u;
@@ -361,7 +361,7 @@ Suite loadSuite(const std::string& yamlPath) {
             if (ulpSomewhere && tc.image.ulpPrecision.empty()) {
                 fail(yamlPath, tn,
                      "image mode with ulp: tolerance requires image.ulp_precision "
-                     "(float | native); half is not yet supported in v1.0");
+                     "(float | native); half is not yet supported");
             }
         }
 

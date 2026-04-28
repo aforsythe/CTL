@@ -1,5 +1,5 @@
 # ctltest_core - shared library between ctltest_run_one (ctest driver)
-# and ctltest (standalone CLI, v0.4+).
+# and ctltest (standalone CLI).
 #
 # All framework logic lives here; the driver and CLI are thin wrappers.
 # C++17 is scoped to this target (the rest of the project is C++11).

@@ -23,8 +23,8 @@ public:
 // Owns one Ctl::SimdInterpreter. Loads modules, invokes one CTL function with
 // one sample's worth of inputs, and returns the named outputs + return value.
 //
-// v0.1 always dispatches at N=1 (uniform). Sweep/image modes in later phases
-// will add maxSamples()-batched varying calls.
+// Unit dispatch is always N=1 (uniform). Sweep and image modes batch up to
+// maxSamples() lanes via runBatch / runImage.
 class InterpRunner {
 public:
     InterpRunner();

@@ -15,10 +15,7 @@ std::string join(const std::string& base, const std::string& leaf) {
     if (leaf.empty()) return base;
     // '/' is what CtlType::childElementV expects as the segment separator,
     // so the joined path is valid for both TypeStorage::set/get and the
-    // human-readable MarshalError text. v1.0 used '.' and restricted
-    // nested aggregates because childElementV had an off-by-one that
-    // silently truncated multi-segment paths; v1.1 fixes the parser and
-    // lifts the restriction.
+    // human-readable MarshalError text.
     return base + "/" + leaf;
 }
 

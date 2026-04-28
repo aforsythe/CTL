@@ -9,7 +9,7 @@
 //   * CsvTable parsing (quoting, CRLF, comments) + cellToValue heuristics
 //   * YamlLoader happy/sad paths
 //   * Marshal round-trip across every scalar kind on flat + nested types
-//     (exercises the v1.1 CtlType::childElementV fix end-to-end)
+//     (exercises the CtlType::childElementV path-parser fix end-to-end)
 //
 // Written as a single hand-rolled harness that matches the style of
 // unittest/IlmCtl/main.cpp — one `TEST(name)` per suite, early abort on
@@ -393,7 +393,7 @@ void testCompareTyped()
         CHECK(d.front().path.find("[1]") != std::string::npos);
     }
 
-    // Nested map: path uses "/field" notation per v1.1.
+    // Nested map: path uses "/field" notation.
     {
         Tolerance t; t.abs = 1.0e-6;
         Value exp = Value::makeMap({ {"x", Value::makeFloat(1.0)},
@@ -597,7 +597,8 @@ void testYamlLoader()
 // These tests drive InterpRunner against the existing st_scalar.ctl fixture,
 // which is copied into the binary dir by the CMake rule. They validate that
 // Marshal + TypeStorage round-trip every scalar kind on flat AND nested
-// shapes after the v1.1 parser fix lifted the flat-type restriction.
+// shapes — the path-parser fix is what makes the nested cases reach the
+// correct leaf.
 
 // InterpRunner has a user-declared dtor which suppresses implicit move, and
 // holds a unique_ptr so copy is deleted. Configure via a ref-parameter helper
@@ -689,8 +690,8 @@ void testMarshalStructRoundTrip()
 
 void testMarshalNestedArrayRoundTrip()
 {
-    // v1.1 regression gate: float[3][3] in, float[3][3] out.
-    Section s("Marshal nested array round-trip (v1.1)");
+    // Regression gate: float[3][3] in, float[3][3] out.
+    Section s("Marshal nested array round-trip");
     InterpRunner r;
     initInterp(r);
 
@@ -719,8 +720,8 @@ void testMarshalNestedArrayRoundTrip()
 
 void testMarshalStructWithArrayMemberRoundTrip()
 {
-    // v1.1: struct containing an array member (struct -> array -> scalar path).
-    Section s("Marshal struct-with-array round-trip (v1.1)");
+    // Struct containing an array member (struct -> array -> scalar path).
+    Section s("Marshal struct-with-array round-trip");
     InterpRunner r;
     initInterp(r);
 
@@ -743,8 +744,8 @@ void testMarshalStructWithArrayMemberRoundTrip()
 
 void testMarshalArrayOfStructRoundTrip()
 {
-    // v1.1: array of struct (array -> struct -> scalar path).
-    Section s("Marshal array-of-struct round-trip (v1.1)");
+    // Array of struct (array -> struct -> scalar path).
+    Section s("Marshal array-of-struct round-trip");
     InterpRunner r;
     initInterp(r);
 
@@ -759,10 +760,8 @@ void testMarshalArrayOfStructRoundTrip()
     CHECK(std::fabs(out["return"].f - 10.0) < 1.0e-5);
 }
 
-// ============================================================================
-// v1.2 hardening pass — additional unit tests for previously-uncovered
-// public surfaces. Organized in the same `void test*()` style as above.
-// ============================================================================
+// Additional unit tests for previously-uncovered public surfaces.
+// Organized in the same `void test*()` style as above.
 
 // ---------------------------------------------------------------- Value::describe
 
@@ -2249,7 +2248,6 @@ int main(int argc, char* argv[])
     if (want("MarshalStructWithArray"))             TEST(testMarshalStructWithArrayMemberRoundTrip);
     if (want("MarshalArrayOfStruct"))               TEST(testMarshalArrayOfStructRoundTrip);
 
-    // v1.2 hardening — additional unit tests.
     if (want("ValueDescribe"))                      TEST(testValueDescribe);
     if (want("ValueSeqAndMap"))                     TEST(testValueSeqAndMap);
     if (want("ToleranceEmptyAndPerField"))          TEST(testToleranceEmptyAndPerField);

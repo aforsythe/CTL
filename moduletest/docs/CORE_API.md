@@ -389,16 +389,16 @@ int main(int argc, char** argv) {
 
 Same as `ctltest_run_one`, minus the CLI argument handling.
 
-## Stability promises (v1.1)
+## Stability shape
 
-- **`Value`, `Tolerance`, `OracleSpec`, `TestCase`, `Suite`**: stable.
-  Fields may be added; existing fields won't move or change meaning
-  inside v1.
-- **`InterpRunner` API**: stable. `runBatch` and `runCtlNative` are the
-  only additions since v0.1.
+- **`Value`, `Tolerance`, `OracleSpec`, `TestCase`, `Suite`**: pure-data
+  shapes. Fields may be added; existing fields don't move or change
+  meaning.
+- **`InterpRunner` API**: stable shape — construct, set paths, load
+  modules, run / runBatch / runCtlNative.
 - **`Oracle` and `Reporter` interfaces**: stable. Adding a new concrete
   oracle / reporter type is the non-breaking path.
 - **`TestKit`**: expanding — `expect_near_*` variants planned. Existing
   `TestAssertion::Kind` values won't be renumbered.
-- **Snapshot YAML format**: stable inside v1. The banner comment is
-  informative; tooling should read the data, not parse the banner.
+- **Snapshot YAML format**: stable. The banner comment is informative;
+  tooling should read the data, not parse the banner.

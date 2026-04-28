@@ -276,9 +276,9 @@ against production ACES modules.
 Three layers:
 
 1. **Core interpreter regression**: `unittest/IlmCtl/testPathParser.cpp`
-   guards the `CtlType::childElementV` fix that v1.1 depends on.
-   Registered under the existing `IlmCtlTest` binary, not under
-   ctltest.
+   guards the `CtlType::childElementV` fix multi-segment path resolution
+   depends on. Registered under the existing `IlmCtlTest` binary, not
+   under ctltest.
 2. **C++ unit tests**: `moduletest/unittest/ctltest_unit.cc` runs
    twelve test sections against `ctltest_core`'s public API. Covers
    `Value`, `Tolerance::merge`, `compareTyped`,
@@ -297,4 +297,3 @@ Three layers:
   meanings.
 - [`CORE_API.md`](./CORE_API.md) — C++ types for embedders.
 - [`TOLERANCE.md`](./TOLERANCE.md) — the compare semantics in detail.
-- [`RELEASE_NOTES.md`](./RELEASE_NOTES.md) — what shipped when.

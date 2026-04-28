@@ -137,7 +137,7 @@ observed error, and which tolerance was in effect and where it came from.
 - Start with `oracle.inline` + tight `abs`. Loosen only when you hit real
   libm drift; the first failure diagnostic already reports the ULP error,
   so you can decide based on observation instead of guessing.
-- Full struct literals only in v1. Every field of a struct input/output
-  must appear. See [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) "Values & types".
+- Full struct literals only. Every field of a struct input/output must
+  appear. See [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) "Values & types".
 - Snapshot mode is gated. First recording needs both the env var and a
   per-test `writable: true`; see [`CLI.md`](./CLI.md) "Snapshot flags".

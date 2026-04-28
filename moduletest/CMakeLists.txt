@@ -3,7 +3,7 @@
 # Layout:
 #   lib/         ctltest_core static library (case model, loader, runner, oracles)
 #   driver/      ctltest_run_one, internal binary invoked by ctest
-#   cli/         ctltest, installed alongside ctlrender (v0.4+)
+#   cli/         ctltest, installed alongside ctlrender
 #   cmake/       CtlTestDiscover.cmake, exposes ctltest_add_yaml(path)
 #   tests/       manifest.txt + self-test YAMLs + CTL fixtures
 #

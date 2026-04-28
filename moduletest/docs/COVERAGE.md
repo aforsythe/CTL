@@ -6,7 +6,7 @@ Codacy, SonarQube, `genhtml`, the VS Code "Coverage Gutters" extension,
 and most other coverage tooling.
 
 Statement-level coverage only — branch coverage (taken / not-taken on each
-conditional) is not reported in v1. See "Known v1 limitations" below.
+conditional) is not reported. See "Known limitations" below.
 
 ## Local use
 
@@ -99,15 +99,15 @@ No `.info` file is written. This means CI scripts that always pass
 `--coverage` work fine on non-coverage builds — they just don't get a
 report.
 
-## Known v1 limitations
+## Known limitations
 
-These are deliberate scope cuts for v1. None block the basic CI workflow;
-each is a candidate for a future v1.1 / v1.2 follow-up.
+These are deliberate scope cuts. None block the basic CI workflow; each
+is a candidate for a future follow-up.
 
-v1.1 closed the "lazy discovery misses fully-uncalled functions" gap via
-`SimdCoverage::discoverModule`, called eagerly from `SimdModule::runInitCode`
-at load time. Functions that are loaded but never called now appear as
-`DA:N,0` in the report.
+Functions that are loaded but never called appear as `DA:N,0` in the
+report — `SimdCoverage::discoverModule` runs eagerly from
+`SimdModule::runInitCode` at load time, so fully-uncalled functions still
+show up in the coverage tree.
 
 ### Statement coverage only, no branch coverage
 

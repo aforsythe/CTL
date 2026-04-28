@@ -9,9 +9,10 @@
 // the Runner drains the buffer after each CTL call and translates assertions
 // into Diagnostics.
 //
-// Public surface deliberately tiny for v0.5: `fail(string)` and
-// `expect_near_f(float, float, float)`. More expect_* variants will land once
-// ACES authors have a concrete need; each new one is ~20 lines of glue.
+// Public surface deliberately tiny: `fail(string)`, `expect_true(bool)`,
+// and `expect_near_f(float, float, float)`. More expect_* variants will
+// land once ACES authors have a concrete need; each new one is ~20 lines
+// of glue.
 
 #include <string>
 #include <vector>
@@ -36,9 +37,9 @@ struct TestAssertion {
 
 // Factory: construct a SimdInterpreter with the testkit C funcs pre-registered
 // and the "testkit" CTL module preloaded (no path entry required). Callers own
-// the returned pointer. v0.5 always uses this factory for every interpreter to
-// keep init costs folded into one path; the testkit symbols are only visible
-// to modules that explicitly `import "testkit"`.
+// the returned pointer. The framework always uses this factory for every
+// interpreter to keep init costs folded into one path; the testkit symbols
+// are only visible to modules that explicitly `import "testkit"`.
 //
 // Thread-safe (one-shot std::call_once gate around the internal type fixture).
 Ctl::SimdInterpreter* newTestInterpreter();

@@ -122,8 +122,8 @@ replacement.
 
 ## Not yet supported
 
-v1.1's escape hatch is deliberately minimal. The following are planned
-but not shipped:
+The escape hatch is deliberately minimal. The following are planned
+but not implemented:
 
 - Vector / struct assertion variants: `expect_near_f3`, `expect_near_struct`.
   Use a helper that calls `expect_near_f` component-wise for now.

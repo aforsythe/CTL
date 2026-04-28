@@ -24,9 +24,9 @@ configure_file(
   COPYONLY
 )
 
-# v1.2 hardening: ut_native.ctl is a TestKit fixture for the ctl_native
-# dispatch tests. Copied next to the binary so InterpRunner::setModulePaths({"."})
-# can resolve "ut_native" alongside "st_scalar".
+# ut_native.ctl is a TestKit fixture for the ctl_native dispatch tests.
+# Copied next to the binary so InterpRunner::setModulePaths({"."}) can
+# resolve "ut_native" alongside "st_scalar".
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ut_native.ctl
   ${CMAKE_CURRENT_BINARY_DIR}/ut_native.ctl

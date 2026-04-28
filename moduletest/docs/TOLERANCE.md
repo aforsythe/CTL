@@ -108,11 +108,6 @@ A path that doesn't resolve in the expected shape is a load-time error
 (`validateTolerancePaths` check). "Doesn't resolve" covers unknown keys,
 out-of-range indices, and intermediate kind mismatches.
 
-v1.1 made the full multi-segment path work — v1.0 would silently stop
-after the first segment (see RELEASE_NOTES "Interpreter fix"). If you
-had to flatten out a `return.v[2]` workaround in v1.0, v1.1 accepts it
-natively.
-
 ## Non-FP leaves
 
 Tolerance bounds (`abs` / `rel` / `ulp`) on non-FP leaves are a load-
@@ -127,8 +122,8 @@ fails `validateTolerancePaths` at load time. Integer and string
 comparison is always exact; there is no tolerance for "almost true".
 
 If you need loose string compare (case-insensitive, whitespace-trimmed),
-the plan defers that to a `normalize: {trim, case_insensitive}` key in a
-future release. It is not in v1.1.
+the plan defers that to a `normalize: {trim, case_insensitive}` key. Not
+yet implemented.
 
 ## Half precision
 
@@ -165,8 +160,8 @@ float32".
 In **image mode** any use of `ulp:` requires an explicit
 `image.ulp_precision` key so authors don't silently interpret a
 `ulp: 1` bound as half-ULP when the EXR happens to be 16-bit float.
-`float` (the v1 default) is the only accepted value today; `half` is
-reserved; `native` is reserved.
+`float` is the only accepted value today; `half` and `native` are
+reserved.
 
 For unit / sweep / snapshot oracles the pixel-type question doesn't
 arise — `ulp:` is always float32 ULP.

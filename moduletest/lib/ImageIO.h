@@ -17,8 +17,8 @@ public:
 // Pixel at (x, y) in channel c is `channels[c][y*width + x]`.
 //
 // Derived from the read path in ctlrender/exr_file.cc, intentionally
-// keeping only what v0.3 needs (no format_t, no dpx::fb, no compression
-// selection). Reads half or float sources; always returns float32.
+// trimmed (no format_t, no dpx::fb, no compression selection). Reads
+// half or float sources; always returns float32.
 struct Image {
     int width  = 0;
     int height = 0;

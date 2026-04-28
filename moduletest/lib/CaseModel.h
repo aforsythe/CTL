@@ -14,9 +14,9 @@ namespace ctltest {
 // Value — an authored or observed CTL value. Scalar leaves, plus recursive
 // composition for arrays (Seq) and structs (Map).
 //
-// v0.1 supports: bool, int, uint, float (half authored as float then rounded
-// on marshal), string, fixed arrays, flat structs, and nested composites.
-// Tables, varying lanes, and strings in arithmetic positions are v0.2+.
+// Supports: bool, int, uint, float (half authored as float then rounded on
+// marshal), string, fixed arrays, flat structs, and nested composites.
+// Tables, varying lanes, and strings in arithmetic positions are deferred.
 struct Value {
     // Half is a distinct kind so the oracle can round the author's expected
     // value to nearest-even half on compare and surface the 16-bit pattern in
@@ -66,7 +66,7 @@ struct Tolerance {
     }
 };
 
-// OracleSpec — v0.5 supports Inline, Csv, Exr, and Snapshot.
+// OracleSpec — Inline, Csv, Exr, and Snapshot are supported.
 struct OracleSpec {
     enum class Kind { Inline, Csv, Exr, Snapshot };
 
@@ -124,10 +124,10 @@ struct ImageSpec {
     std::map<std::string, std::string> outputChannelMap;
 
     // When tolerance carries `ulp:` in image mode, this key disambiguates the
-    // unit. "float" (v1.0 default) computes ULP distance on float32. "half" is
-    // not yet supported. "native" is reserved for v2 (read pixel type from the
-    // EXR and pick per-channel). Empty means the author hasn't set it, in
-    // which case any use of `ulp:` in tolerance is a load-time error.
+    // unit. "float" computes ULP distance on float32. "half" is not yet
+    // supported. "native" is reserved (read pixel type from the EXR and pick
+    // per-channel). Empty means the author hasn't set it, in which case any
+    // use of `ulp:` in tolerance is a load-time error.
     std::string ulpPrecision;
 };
 
@@ -161,7 +161,7 @@ struct TestCase {
     // How the return value is addressed in oracle/tolerance paths.
     std::string returnsName = "return";
 
-    // Tags for filtering; known-failure inversion (v0.5).
+    // Tags for filtering; known-failure inversion.
     std::vector<std::string> tags;
     bool knownFailure = false;
 };

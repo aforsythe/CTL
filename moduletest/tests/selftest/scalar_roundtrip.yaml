@@ -122,7 +122,7 @@ tests:
     description: |
       Nested fixed-array table path: float[3][3] in, float[3][3] out.
       Requires Marshal to walk arrays-of-arrays with "/" paths and the
-      v1.1 CtlType path-parser fix.
+      CtlType path-parser fix.
     function: st_scalar::transpose3x3
     inputs:
       m:

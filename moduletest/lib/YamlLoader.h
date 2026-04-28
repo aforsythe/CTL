@@ -26,7 +26,7 @@ private:
 };
 
 // Parse a suite YAML file into a Suite. Throws LoadError with file/line/col on
-// malformed input. v0.1 schema subset:
+// malformed input. Schema subset:
 //
 //   version: 1
 //   suite: <name>                          # optional

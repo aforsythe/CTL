@@ -1,8 +1,8 @@
 # ctltest YAML schema reference
 
 This document defines every key that a ctltest suite YAML may contain.
-It describes the shape v1.1 accepts; anything else is a load-time error
-reported as `file:line:col: message`.
+Anything else is a load-time error reported as
+`file:line:col: message`.
 
 If you're new to ctltest, read [`QUICKSTART.md`](./QUICKSTART.md) first.
 
@@ -78,13 +78,13 @@ YAML scalars, sequences, and maps map into CTL types as follows:
 | sequence of struct maps         | array of struct                                |
 | struct map containing sequences | struct with array member                       |
 
-v1.1 notes:
+Notes:
 
 - Nested aggregates (arbitrary composition of arrays and structs) are
   fully supported on both the input and output sides.
 - **Struct literals must be full.** Every field of a struct expected or
   input must appear. Missing or unknown keys fail load. Partial literals
-  are planned for a future release.
+  are planned.
 - Inline tables above a size threshold must come from a sidecar CSV or
   EXR via `from_file:` — raw in-YAML tables of hundreds of entries are
   unreadable on diff. (Threshold is currently a soft ~64 elements.)
@@ -274,7 +274,7 @@ See [`examples/`](../examples/) for worked cases:
 
 ## Not yet supported (will load-error)
 
-v1.1 deliberately rejects the following so authors don't silently get
+The following are deliberately rejected so authors don't silently get
 the wrong behavior:
 
 - **Partial struct literals.** Every member must appear.
@@ -283,4 +283,4 @@ the wrong behavior:
 - **`ulp_precision: half`** in image mode. Authors should use `float`
   and convert tolerances accordingly.
 - **Tolerance keys on non-FP leaves.** Ints / bools / strings compare
-  exactly. `normalize:` on strings is planned for v2.
+  exactly. `normalize:` on strings is planned.
