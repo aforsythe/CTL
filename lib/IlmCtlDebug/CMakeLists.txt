@@ -14,6 +14,8 @@ set(SOURCES
     CtlExprEval.cc
     CtlPixelBinder.cc
     CtlPixelEvolution.cc
+    CtlStageChain.cc
+    CtlValueFormatter.cc
 )
 
 add_library(IlmCtlDebug ${SOURCES})
@@ -50,6 +52,8 @@ install(FILES
             CtlExprEval.h
             CtlPixelBinder.h
             CtlPixelEvolution.h
+            CtlStageChain.h
+            CtlValueFormatter.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CTL)
 
 install(TARGETS IlmCtlDebug DESTINATION ${CMAKE_INSTALL_LIBDIR})

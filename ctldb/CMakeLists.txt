@@ -6,7 +6,6 @@ if(NOT CTL_ENABLE_DEBUGGER)
 endif()
 
 set(CTLDB_SOURCES
-    ValueFormatter.cc
     main.cc
     Repl.cc
 )

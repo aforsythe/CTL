@@ -6,7 +6,8 @@
 #include "DapHandlers.h"
 #include <CtlExprEval.h>
 #include <CtlPixelBinder.h>
-#include "ValueFormatter.h"
+#include <CtlStageChain.h>
+#include <CtlValueFormatter.h>
 
 #include <CtlMessage.h>
 #include <CtlSimdAddr.h>
@@ -25,24 +26,6 @@
 namespace ctldap {
 
 namespace {
-
-// Extract the directory portion of a path (everything before last '/').
-std::string pathDirname (const std::string &p)
-{
-    auto pos = p.find_last_of ('/');
-    if (pos == std::string::npos) return ".";
-    return p.substr (0, pos);
-}
-
-// Extract the basename WITHOUT extension.
-std::string pathStem (const std::string &p)
-{
-    auto sl = p.find_last_of ('/');
-    auto base = (sl == std::string::npos) ? p : p.substr (sl + 1);
-    auto dot = base.find_last_of ('.');
-    if (dot == std::string::npos) return base;
-    return base.substr (0, dot);
-}
 
 // Extract a user-friendly name from a qualified CTL symbol.
 // Strips everything before the last "::" or "$".
@@ -69,76 +52,11 @@ std::string functionFile (const Ctl::SimdInterpreter &interp,
     return info->module()->fileName();
 }
 
-// Stage-chaining helpers (mirrored from ctldb/main.cc)
-
-// Capture float outputs of fc into a name→value map for the next stage.
-std::map<std::string, float> captureOutputs (Ctl::FunctionCallPtr &fc)
-{
-    std::map<std::string, float> result;
-    for (std::size_t i = 0; i < fc->numOutputArgs(); ++i)
-    {
-        Ctl::FunctionArgPtr arg = fc->outputArg (i);
-        if (!arg) continue;
-        if (arg->type() &&
-            arg->type()->cDataType() == Ctl::FloatTypeEnum)
-        {
-            float v = 0.0f;
-            arg->get (&v, 0, 0, 1);
-            result[arg->name()] = v;
-        }
-    }
-    return result;
-}
-
-// Bind inputs of fc from prevOutputs (outputs of the prior stage).
-// Matching: exact name, then Out→In suffix synonym (rOut→rIn, etc.).
-void bindFromPriorStage (Ctl::FunctionCallPtr &fc,
-                         const std::map<std::string, float> &prevOutputs)
-{
-    for (std::size_t i = 0; i < fc->numInputArgs(); ++i)
-    {
-        Ctl::FunctionArgPtr arg = fc->inputArg (i);
-        if (!arg) continue;
-
-        const std::string &inName = arg->name();
-        bool bound = false;
-
-        // 1) Exact name match.
-        {
-            auto it = prevOutputs.find (inName);
-            if (it != prevOutputs.end())
-            {
-                float v = it->second;
-                arg->set (&v, 0, 0, 1);
-                bound = true;
-            }
-        }
-
-        // 2) In-suffix synonym: replace trailing "In" with "Out" and look up.
-        if (!bound && inName.size() >= 2 &&
-            inName.substr (inName.size() - 2) == "In")
-        {
-            std::string candidate = inName.substr (0, inName.size() - 2) + "Out";
-            auto it = prevOutputs.find (candidate);
-            if (it != prevOutputs.end())
-            {
-                float v = it->second;
-                arg->set (&v, 0, 0, 1);
-                bound = true;
-            }
-        }
-
-        if (!bound)
-        {
-            if (arg->hasDefaultValue())
-                arg->setDefaultValue();
-            // else: leave zero-initialized
-        }
-    }
-}
-
-// (Pixel + uniform-param binding lives in lib/IlmCtlDebug so ctldb
-// shares the exact same name-matching rules.)
+// (Path + stage-chain + pixel-binding helpers live in lib/IlmCtlDebug —
+// Ctl::pathDirname, Ctl::pathStem, Ctl::parseColonPath,
+// Ctl::captureOutputs, Ctl::bindFromPriorStage, Ctl::bindPixelInputs,
+// Ctl::bindUniformParams.  ctldb shares the same lib so behavior
+// can't drift between the two debuggers.)
 
 } // namespace
 
@@ -289,38 +207,15 @@ HandlerSet::setupSession ()
     };
 
     // Build module search path:
-    //   1. CTL_MODULE_PATH env var (colon-separated)
+    //   1. $CTL_MODULE_PATH (colon-separated)
     //   2. modulePaths from launch args
     //   3. Parent directory of each CTL file (sibling imports)
     _interp.reset (new Ctl::SimdInterpreter());
     {
-        std::vector<std::string> paths;
-
-        if (const char *env = std::getenv ("CTL_MODULE_PATH"))
-        {
-            std::string s = env;
-            std::size_t pos = 0;
-            while (pos < s.size())
-            {
-                std::size_t colon = s.find (':', pos);
-                std::string seg = s.substr (
-                    pos,
-                    colon == std::string::npos
-                        ? std::string::npos
-                        : colon - pos);
-                if (!seg.empty())
-                    paths.push_back (seg);
-                if (colon == std::string::npos) break;
-                pos = colon + 1;
-            }
-        }
-
-        for (const auto &p : _modulePaths)
-            paths.push_back (p);
-
-        for (const auto &p : _ctlPaths)
-            paths.push_back (pathDirname (p));
-
+        std::vector<std::string> paths =
+            Ctl::parseColonPath (std::getenv ("CTL_MODULE_PATH"));
+        for (const auto &p : _modulePaths) paths.push_back (p);
+        for (const auto &p : _ctlPaths)    paths.push_back (Ctl::pathDirname (p));
         _interp->setUserModulePath (paths, true);
     }
 
@@ -329,7 +224,7 @@ HandlerSet::setupSession ()
     {
         try
         {
-            _interp->loadModule (pathStem (p), p);
+            _interp->loadModule (Ctl::pathStem (p), p);
         }
         catch (const std::exception &e)
         {
@@ -492,7 +387,7 @@ HandlerSet::runInterpreter ()
             Ctl::FunctionArgPtr arg = fc->outputArg (i);
             if (!arg || !arg->type()) continue;
             std::string val =
-                ctldb::formatValue (arg->type().cast<Ctl::DataType>(),
+                Ctl::formatValue (arg->type().cast<Ctl::DataType>(),
                                     arg->data(), 0);
             if (!first) s += ", ";
             s += arg->name() + "=" + val;
@@ -511,7 +406,7 @@ HandlerSet::runInterpreter ()
         // get their inputs from the prior stage's outputs.
         if (stage > 0)
         {
-            bindFromPriorStage (fc, prevOutputs);
+            Ctl::bindFromPriorStage (fc, prevOutputs);
             // Update debugger's FC reference for variable inspection.
             _dbg->setFunctionCall (fc.pointer());
         }
@@ -527,7 +422,7 @@ HandlerSet::runInterpreter ()
             break;
         }
 
-        prevOutputs = captureOutputs (fc);
+        prevOutputs = Ctl::captureOutputs (fc);
         lastFc = fc;
 
         // For multi-stage chains, surface each stage's outputs as a
@@ -714,7 +609,7 @@ HandlerSet::onVariables (const nlohmann::json &args)
                 }
             }
             std::string val =
-                ctldb::formatValue (m.type.cast<Ctl::DataType>(),
+                Ctl::formatValue (m.type.cast<Ctl::DataType>(),
                                     fieldData, 0);
             out.push_back ({
                 {"name",                m.name},
@@ -807,7 +702,7 @@ HandlerSet::onVariables (const nlohmann::json &args)
                 continue;
             }
             if (!data) continue;
-            std::string val = ctldb::formatValue (info->dataType(), data, 0);
+            std::string val = Ctl::formatValue (info->dataType(), data, 0);
             int childRef = allocateStructRef (info->dataType(), data);
             mvars.push_back ({
                 {"name",                friendlyName (sit->first)},
@@ -900,7 +795,7 @@ HandlerSet::onVariables (const nlohmann::json &args)
         }
         if (looksLikeConstant) continue;
 
-        std::string val = ctldb::formatValue (v.type, v.data, 0);
+        std::string val = Ctl::formatValue (v.type, v.data, 0);
         int childRef = allocateStructRef (v.type, v.data);
         vars.push_back ({
             {"name",                name},
@@ -998,7 +893,7 @@ HandlerSet::onSetVariable (const nlohmann::json &args)
         }
         // Echo the formatted new value back so VS Code refreshes the
         // panel without an extra variables round-trip.
-        return nlohmann::json{{"value", ctldb::formatValue (v.type, v.data, 0)}};
+        return nlohmann::json{{"value", Ctl::formatValue (v.type, v.data, 0)}};
     }
 
     return nlohmann::json{{"value", "<not found: " + name + ">"}};
@@ -1079,7 +974,7 @@ HandlerSet::onEvaluate (const nlohmann::json &args)
     {
         if (v.name == expr || friendlyName (v.name) == expr)
         {
-            return nlohmann::json{{"result", ctldb::formatValue(v.type, v.data, 0)},
+            return nlohmann::json{{"result", Ctl::formatValue(v.type, v.data, 0)},
                                   {"variablesReference", 0}};
         }
     }

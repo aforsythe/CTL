@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 ///////////////////////////////////////////////////////////////////////////
 
-#include "ValueFormatter.h"
+#include "CtlValueFormatter.h"
 
 #include <CtlAlign.h>
 #include <CtlStdType.h>
@@ -13,7 +13,7 @@
 #include <sstream>
 #include <string>
 
-namespace ctldb {
+namespace Ctl {
 
 namespace {
 
@@ -66,7 +66,7 @@ std::string formatPrimitive (const Ctl::DataTypePtr &type, const void *data)
 } // namespace
 
 std::string
-formatValue (const Ctl::DataTypePtr &type,
+formatValue (const DataTypePtr &type,
              const void *data,
              int indent)
 {
@@ -129,4 +129,4 @@ formatValue (const Ctl::DataTypePtr &type,
     return formatPrimitive (type, data);
 }
 
-} // namespace ctldb
+} // namespace Ctl

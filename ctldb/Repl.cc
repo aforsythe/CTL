@@ -5,7 +5,7 @@
 
 #include "Repl.h"
 
-#include "ValueFormatter.h"
+#include <CtlValueFormatter.h>
 
 #include <CtlExprEval.h>
 #include <CtlPixelEvolution.h>

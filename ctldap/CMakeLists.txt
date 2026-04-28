@@ -35,13 +35,6 @@ target_link_libraries(ctldap
         $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>
 )
 
-# Reuse ctldb's ValueFormatter (build it as an OBJECT library or duplicate
-# the source compile here).  Simplest: include the cc directly.
-target_sources(ctldap PRIVATE
-    ${CMAKE_SOURCE_DIR}/ctldb/ValueFormatter.cc
-)
-target_include_directories(ctldap PRIVATE ${CMAKE_SOURCE_DIR}/ctldb)
-
 install(TARGETS ctldap
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 

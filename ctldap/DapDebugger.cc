@@ -6,7 +6,7 @@
 #include "DapDebugger.h"
 
 #include "DapServer.h"
-#include "ValueFormatter.h"
+#include <CtlValueFormatter.h>
 
 #include <CtlExprEval.h>
 #include <CtlPixelEvolution.h>
@@ -316,7 +316,7 @@ DapDebugger::renderLogMessage (Ctl::SimdXContext &xc,
             {
                 if (v.name == expr)
                 {
-                    rendered = ctldb::formatValue (v.type, v.data, 0);
+                    rendered = Ctl::formatValue (v.type, v.data, 0);
                     resolved = true;
                     break;
                 }
