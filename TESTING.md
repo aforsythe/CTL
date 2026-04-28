@@ -1,22 +1,58 @@
 # Testing the CTL performance branches
 
-Three branches stack as fast-forwards.  **Unless you have a specific
-reason to isolate a subset, check out the top branch
-(`ship/moduleTestFramework-v1`) and test everything from there.**
+`ship/cpu-perf` is the shared base.  Three feature branches sit as
+**siblings on top of it**, each adding one orthogonal capability:
 
 ```
-ship/moduleTestFramework-v1   ← recommended, all the below + module test framework
-ship/gpu-metal                ← everything in cpu-perf plus the Apple Silicon Metal GPU backend
-ship/cpu-perf                 ← this branch: CPU performance work only
-master                        ← pre-branch baseline
+ship/cpu-perf                  ← shared base: CPU performance + interpreter tests
+├─ ship/gpu-metal              ← + Apple Silicon Metal GPU backend
+├─ ship/moduleTestFramework-v1 ← + YAML-driven module test framework
+└─ ship/ctl-debugger           ← this branch: + ctldb (REPL) + ctldap (DAP server)
 ```
 
-Each branch is a proper superset of the one below, so:
+Each sibling is independently testable: pick the feature you want to
+evaluate, check out that branch, build, run `ctest`.  No need to pick
+up unrelated work.
 
-    git checkout ship/moduleTestFramework-v1
+---
 
-gives you everything.  The subset branches exist for downstream
-integrators who want to review or adopt the work in smaller pieces.
+## If you're on this branch (`ship/ctl-debugger`)
+
+This branch adds a single-pixel debugger for CTL modules: a REPL CLI
+(`ctldb`) and a Debug Adapter Protocol server (`ctldap`) consumed by
+the [vscode-ctl-debug](https://github.com/aforsythe/vscode-ctl-debug)
+extension.  The debugger is gated on `-DCTL_ENABLE_DEBUGGER=ON`; OFF
+by default so normal builds pay zero cost.
+
+### Build and test
+
+```bash
+git checkout ship/ctl-debugger
+cmake -B build-dbg -DCMAKE_BUILD_TYPE=Debug -DCTL_ENABLE_DEBUGGER=ON
+cmake --build build-dbg -j
+ctest --test-dir build-dbg                            # should be green
+```
+
+The full ctest pulls in the cpu-perf interpreter tests (including
+`testDebugger` inside `IlmCtlTest`).  To run only the debugger
+end-to-end surface:
+
+```bash
+ctest --test-dir build-dbg -L 'ctldb|ctldap'          # 7 tests
+```
+
+### Try it interactively
+
+```bash
+# REPL session against a CTL file:
+./build-dbg/ctldb/ctldb -ctl path/to/transform.ctl --break transform.ctl:42
+
+# DAP server (the vscode extension launches this for you):
+./build-dbg/ctldap/ctldap < dap-session.txt
+```
+
+The cpu-perf base is also active on this branch — the section below
+applies if you also want to evaluate the CPU perf work.
 
 ---
 
