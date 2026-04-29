@@ -55,6 +55,7 @@
 
 #include <testEdgeValues.h>
 #include <testEndOfLine.h>
+#include <testInlineHelpers.h>
 #include <testParser.h>
 #include <testConcurrentCalls.h>
 #include <testCppCall.h>
@@ -85,6 +86,7 @@ main (int argc, char *argv[])
     TEST (testSimdRegAddr);
     TEST (testSimdRegOwnership);
     TEST (testEdgeValues);
+    TEST (testInlineHelpers);
     TEST (testConcurrentCalls);
     TEST (testUniformBoolDefault);
     TEST (testVaryingArrayIndex);

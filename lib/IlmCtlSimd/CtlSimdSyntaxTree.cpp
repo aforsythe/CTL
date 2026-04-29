@@ -69,6 +69,54 @@
 #include <cassert>
 #include <vector>
 #include <CtlSimdOp.h>
+#include <CtlSimdStdLibTemplates.h>
+#include <cmath>
+
+
+namespace Ctl {
+
+// SimdCFunc-shaped inline replacements for the idiomatic CTL helpers
+// `min`, `max`, `clip`, `radians_to_degrees`, `degrees_to_radians`,
+// `copysign`, `wrap_to_360`.  Match is by name (bare or `::name`) and
+// exact float signature; the substituted body must stay bit-identical
+// to the matched CTL function or output diverges silently.  Pinned by
+// unittest/IlmCtl/testInlineHelpers.  Restricted to pure arithmetic so
+// helpers that internally call pow/log/exp/sqrt keep their SLEEF /
+// Accelerate batched-math path through the existing simdFunc{1,2}Arg
+// templates.
+
+DEFINE_SIMD_FUNC_2_ARG (InlineMinFloat,
+                        (a1 < a2 ? a1 : a2),
+                        float, float, float);
+DEFINE_SIMD_FUNC_2_ARG (InlineMaxFloat,
+                        (a1 > a2 ? a1 : a2),
+                        float, float, float);
+DEFINE_SIMD_FUNC_1_ARG (InlineClipFloat,
+                        (a1 < 1.0f ? a1 : 1.0f),
+                        float, float);
+DEFINE_SIMD_FUNC_1_ARG (InlineRadToDegFloat,
+                        (a1 * 180.0f / 3.14159265358979323846f),
+                        float, float);
+DEFINE_SIMD_FUNC_1_ARG (InlineDegToRadFloat,
+                        (a1 / 180.0f * 3.14159265358979323846f),
+                        float, float);
+
+// Match CTL `sign(y)*fabs(x)` exactly; sign(0) is 0, so copysign(x,0)=0.
+// (std::copysign would return +x for y=0 — different semantics.)
+DEFINE_SIMD_FUNC_2_ARG (InlineCopysignFloat,
+                        ((a2 < 0.0f ? -1.0f : (a2 > 0.0f ? 1.0f : 0.0f))
+                         * std::fabs (a1)),
+                        float, float, float);
+
+// CTL: float y = fmod(hue, 360.); if (y < 0.) y += 360.; return y;
+DEFINE_SIMD_FUNC_1_ARG (InlineWrapTo360Float,
+                        ([](float h) {
+                            float y = std::fmod (h, 360.0f);
+                            return y < 0.0f ? y + 360.0f : y;
+                        })(a1),
+                        float, float);
+
+} // namespace Ctl
 
 using namespace std;
 
@@ -1092,6 +1140,49 @@ SimdCallNode::returnsType(const TypePtr &t) const
 
 
 
+// Pattern-match a CTL function call against the inline-helper set
+// declared above.  Match criteria: name is exactly the helper token
+// (bare) OR ends with `::<token>` (any qualifier), AND the parameter
+// types and return type match the float shape exactly.  The match is
+// purely syntactic — by name and signature — see the file-level comment
+// for what this does and does not verify.
+//
+// Returns: integer kind (consumed by the switch in generateCode), or
+// -1 = no match.  Kind values are stable so reviewers can correlate
+// the test suite back to the dispatch.
+static int
+isInlineableHelper (const NameNodePtr &name,
+		    const FunctionTypePtr &ft)
+{
+    if (!ft || !name) return -1;
+    if (!ft->returnType().cast<FloatType>()) return -1;
+    const ParamVector &params = ft->parameters();
+
+    const std::string &n = name->name;
+    auto endsWith = [&](const char *suffix, std::size_t suffixLen) {
+	return n == std::string(suffix + 2, suffix + suffixLen) ||  // bare
+	       (n.size() >= suffixLen &&
+		n.compare (n.size() - suffixLen, suffixLen, suffix) == 0);
+    };
+
+    if (params.size() == 2 &&
+	params[0].type.cast<FloatType>() && params[1].type.cast<FloatType>())
+    {
+	if (endsWith ("::min", 5))      return 0;
+	if (endsWith ("::max", 5))      return 1;
+	if (endsWith ("::copysign", 10)) return 9;
+    }
+    else if (params.size() == 1 && params[0].type.cast<FloatType>())
+    {
+	if (endsWith ("::clip", 6))                return 2;
+	if (endsWith ("::radians_to_degrees", 20)) return 6;
+	if (endsWith ("::degrees_to_radians", 20)) return 7;
+	if (endsWith ("::wrap_to_360", 13))         return 10;
+    }
+    return -1;
+}
+
+
 void
 SimdCallNode::generateCode (LContext &lcontext)
 {
@@ -1108,12 +1199,53 @@ SimdCallNode::generateCode (LContext &lcontext)
 
     FunctionTypePtr functionType = info->functionType();
 
+    // Inline-substitution path: emit a SimdCCallInst routed through the
+    // matching simdFunc1Arg/2Arg<Inline...Float> template instead of
+    // dispatching into the user-defined CTL function body.  The arg-push
+    // / return-slot layout is identical to the SimdCallInst path the
+    // CTL function call would produce, so arena bookkeeping is
+    // unchanged.  See the file-level comment above the Inline*Float
+    // declarations for safety/parity rationale.
+    int inlineKind = isInlineableHelper (function, functionType);
+    if (inlineKind >= 0)
+    {
+	functionType->returnType()->generateCode (this, lcontext);
+
+	const ParamVector &params = functionType->parameters();
+	for (int i = (int)params.size() - 1; i >= 0; --i)
+	{
+	    ExprNodePtr a = (i < (int)arguments.size())
+		            ? arguments[i] : params[i].defaultValue;
+	    a->generateCode (lcontext);
+	    params[i].type->generateCastFrom (a, lcontext);
+	}
+
+	SimdCFunc cf;
+	switch (inlineKind)
+	{
+	  case 0:  cf = simdFunc2Arg<InlineMinFloat>;       break;
+	  case 1:  cf = simdFunc2Arg<InlineMaxFloat>;       break;
+	  case 2:  cf = simdFunc1Arg<InlineClipFloat>;      break;
+	  case 6:  cf = simdFunc1Arg<InlineRadToDegFloat>;  break;
+	  case 7:  cf = simdFunc1Arg<InlineDegToRadFloat>;  break;
+	  case 9:  cf = simdFunc2Arg<InlineCopysignFloat>;  break;
+	  case 10: cf = simdFunc1Arg<InlineWrapTo360Float>; break;
+	  default: cf = 0;
+	}
+	slcontext.addInst (new SimdCCallInst (cf,
+					      (int)params.size(),
+					      lineNumber));
+	slcontext.addInst (new SimdFileNameInst (lcontext.fileName(),
+						 lineNumber));
+	return;
+    }
+
     //
     // Reserve space on the stack for the function's return value
     //
 
     functionType->returnType()->generateCode (this, lcontext);
-    
+
     //
     // Push the arguments for the call onto the stack.
     //
