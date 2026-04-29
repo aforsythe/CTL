@@ -7,6 +7,7 @@ set(SOURCES
 	testExamples.cpp
 	testExc.cpp
 	testHugeInit.cpp
+	testInlineHelpers.cpp
 	testParser.cpp
 	testSimdRegAddr.cpp
 	testSimdRegOwnership.cpp
@@ -46,6 +47,7 @@ file(COPY
 	common.ctl
 	example.ctl
 	testArray.ctl
+	testInlineHelpers.ctl
 	testCast.ctl
 	testComments.ctl
 	testCppCall.ctl
