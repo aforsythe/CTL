@@ -72,6 +72,7 @@
 
 #if CTL_USE_ACCELERATE
 #include <Accelerate/Accelerate.h>
+#include <algorithm>
 #endif
 
 #if CTL_USE_SLEEF && !CTL_USE_ACCELERATE
@@ -173,10 +174,29 @@ CTL_ACC_BATCH_1 (Sqrt,  vvsqrtf)
 
 #undef CTL_ACC_BATCH_1
 
+namespace {
+
+// Per-thread scratch for splatting a uniform scalar into a contiguous
+// array, so vvpowf / vvatan2f can consume the uniform side of a vu/uv
+// call through the same batched API as vv.  Sized to MAX_REG_SIZE so
+// one splat covers any regSize().  thread_local avoids shared-buffer
+// contention across concurrent tile workers.
+thread_local float g_ctl_acc_uniform_scratch[8192];
+
+inline float *
+ctl_acc_broadcast (float v, int n)
+{
+    std::fill_n (g_ctl_acc_uniform_scratch, n, v);
+    return g_ctl_acc_uniform_scratch;
+}
+
+} // namespace
+
 // Pow: CTL's pow(a1, a2) = a1**a2 (a1 is base).
 // Accelerate's vvpowf(y, a, b, n) computes y = b**a (a is exponent).
-// Map: vvpowf(out, /*exp*/ a2, /*base*/ a1, &n).  Only the vv case
-// routes through vForce; uniform-arg cases stay on scalar libm.
+// Map: vvpowf(out, /*exp*/ a2, /*base*/ a1, &n).  vu/uv cases broadcast
+// the uniform side into the per-thread scratch above and route through
+// the same batched call.
 template <>
 struct SimdFuncBatch2<Pow>
 {
@@ -185,12 +205,14 @@ struct SimdFuncBatch2<Pow>
     static void run2_vu (const float *a1, const float &a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Pow::call (*(a1++), a2);
+	float *expBcast = ctl_acc_broadcast (a2, n);
+	vvpowf (out, expBcast, a1, &n);
     }
     static void run2_uv (const float &a1, const float *a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Pow::call (a1, *(a2++));
+	float *baseBcast = ctl_acc_broadcast (a1, n);
+	vvpowf (out, a2, baseBcast, &n);
     }
 };
 
@@ -205,12 +227,14 @@ struct SimdFuncBatch2<Atan2>
     static void run2_vu (const float *a1, const float &a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Atan2::call (*(a1++), a2);
+	float *xBcast = ctl_acc_broadcast (a2, n);
+	vvatan2f (out, a1, xBcast, &n);
     }
     static void run2_uv (const float &a1, const float *a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Atan2::call (a1, *(a2++));
+	float *yBcast = ctl_acc_broadcast (a1, n);
+	vvatan2f (out, yBcast, a2, &n);
     }
 };
 
@@ -262,6 +286,15 @@ inline void ctl_sleef_store4 (float *p, CtlSleefV4f v)
     std::memcpy (p, &v, sizeof (v));
 }
 
+// In-register splat of a scalar across a 4-lane SIMD register; used
+// by the vu/uv paths of two-arg sleef ops to route the uniform side
+// through the same 4-wide entry point as vv.
+inline CtlSleefV4f ctl_sleef_splat (float s)
+{
+    float buf[4] = {s, s, s, s};
+    return ctl_sleef_load4 (buf);
+}
+
 } // namespace
 
 // Two-level paste: expands CTL_SLEEF_SFX before concatenation so the
@@ -308,6 +341,8 @@ CTL_SLEEF_BATCH_1 (Sqrt,  sqrt,  u05)
 
 // Pow: CTL pow(a1, a2) = a1**a2.
 // sleef Sleef_powf4_u10<sfx>(x, y) returns x**y, same order.
+// vu/uv cases splat the uniform side into a v4f and route through
+// the same 4-wide entry point as vv.
 template <>
 struct SimdFuncBatch2<Pow>
 {
@@ -325,12 +360,24 @@ struct SimdFuncBatch2<Pow>
     static void run2_vu (const float *a1, const float &a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Pow::call (*(a1++), a2);
+	const CtlSleefV4f s = ctl_sleef_splat (a2);
+	int i = 0;
+	for (; i + 4 <= n; i += 4)
+	    ctl_sleef_store4 (out + i,
+		CTL_SLEEF_FN (pow, u10) (ctl_sleef_load4 (a1 + i), s));
+	for (; i < n; ++i)
+	    out[i] = Pow::call (a1[i], a2);
     }
     static void run2_uv (const float &a1, const float *a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Pow::call (a1, *(a2++));
+	const CtlSleefV4f s = ctl_sleef_splat (a1);
+	int i = 0;
+	for (; i + 4 <= n; i += 4)
+	    ctl_sleef_store4 (out + i,
+		CTL_SLEEF_FN (pow, u10) (s, ctl_sleef_load4 (a2 + i)));
+	for (; i < n; ++i)
+	    out[i] = Pow::call (a1, a2[i]);
     }
 };
 
@@ -353,12 +400,24 @@ struct SimdFuncBatch2<Atan2>
     static void run2_vu (const float *a1, const float &a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Atan2::call (*(a1++), a2);
+	const CtlSleefV4f s = ctl_sleef_splat (a2);
+	int i = 0;
+	for (; i + 4 <= n; i += 4)
+	    ctl_sleef_store4 (out + i,
+		CTL_SLEEF_FN (atan2, u10) (ctl_sleef_load4 (a1 + i), s));
+	for (; i < n; ++i)
+	    out[i] = Atan2::call (a1[i], a2);
     }
     static void run2_uv (const float &a1, const float *a2,
 			 float *out, int n)
     {
-	while (n-- > 0) *(out++) = Atan2::call (a1, *(a2++));
+	const CtlSleefV4f s = ctl_sleef_splat (a1);
+	int i = 0;
+	for (; i + 4 <= n; i += 4)
+	    ctl_sleef_store4 (out + i,
+		CTL_SLEEF_FN (atan2, u10) (s, ctl_sleef_load4 (a2 + i)));
+	for (; i < n; ++i)
+	    out[i] = Atan2::call (a1, a2[i]);
     }
 };
 
