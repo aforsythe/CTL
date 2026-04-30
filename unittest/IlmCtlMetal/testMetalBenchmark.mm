@@ -507,12 +507,14 @@ testMetalBenchmark()
             // Accelerate-ON CPU default, `vvexpf`/`vvlogf` make the
             // small-N CPU path ~2x faster, dropping the 64 K
             // transcendental crossover below 1x — not a Metal codegen
-            // regression. Both `transcendental` and `aces_v2_full` are
-            // arithmetic-bound at 1 Mpx; either one falling below the
-            // floor at that size trips the guard.
+            // regression. `transcendental`, `aces_v2_full`, and
+            // `aces_v2_imported` are all arithmetic-bound at 1 Mpx;
+            // any one falling below the floor at that size trips the
+            // guard.
             const bool isHeavy =
                 std::string(prog.name) == "transcendental" ||
-                std::string(prog.name) == "aces_v2_full";
+                std::string(prog.name) == "aces_v2_full" ||
+                std::string(prog.name) == "aces_v2_imported";
             const bool isLargestSize = (n == kSizes[kNumSizes - 1]);
             if (isHeavy && isLargestSize && ratio < worstHeavyRatio) {
                 worstHeavyRatio = ratio;
@@ -538,7 +540,7 @@ testMetalBenchmark()
 
     json << "  ],\n";
     json << "  \"guard\": {\n";
-    json << "    \"programs\": [\"transcendental\", \"aces_v2_full\"],\n";
+    json << "    \"programs\": [\"transcendental\", \"aces_v2_full\", \"aces_v2_imported\"],\n";
     json << "    \"worst_size\": " << worstHeavySize << ",\n";
     json << "    \"worst_speedup\": " << worstHeavyRatio << ",\n";
     json << "    \"floor_ratio\": " << floorRatio << "\n";
@@ -553,7 +555,8 @@ testMetalBenchmark()
         std::cerr << "testMetalBenchmark: compute-heavy warm-dispatch "
                   << "speedup " << worstHeavyRatio << "x at n="
                   << worstHeavySize << " fell below floor "
-                  << floorRatio << "x across {transcendental, aces_v2_full}. "
+                  << floorRatio << "x across {transcendental, "
+                  << "aces_v2_full, aces_v2_imported}. "
                   << "See PRECISION.md and benchmark_results.json."
                   << std::endl;
         std::abort();
