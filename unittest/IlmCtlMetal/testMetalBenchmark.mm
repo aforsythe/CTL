@@ -70,8 +70,13 @@ struct BenchmarkProgram
                              // large to inline as C strings (e.g. full ACES v2
                              // pipeline, ~1800 lines).
     const char *function;    // fully-qualified name passed to newFunctionCall
-    size_t      numInputs;   // 1, 2, or 3
-    size_t      numOutputs;  // 1 or 3
+    size_t      numInputs;   // counts default-valued args too
+    size_t      numOutputs;
+    const char *modulePath;  // directory added to the interpreter's CTL
+                             // module search path while sourcePath is
+                             // parsed (NULL = leave paths untouched).
+                             // Required when sourcePath has unresolved
+                             // `import` statements.
 };
 
 //
@@ -235,13 +240,13 @@ static const char kAcesV2JmhSource[] =
 static const BenchmarkProgram kPrograms[] =
 {
     { "unity",          "bench_unity",         kUnitySource,         nullptr,
-      "bench_unity::compute",                  2, 1 },
+      "bench_unity::compute",                  2, 1, nullptr },
     { "matrix33",       "bench_mat33",         kMatrix33Source,      nullptr,
-      "bench_mat33::compute",                  3, 3 },
+      "bench_mat33::compute",                  3, 3, nullptr },
     { "transcendental", "bench_xcend",         kTranscendentalSource, nullptr,
-      "bench_xcend::compute",                  2, 1 },
+      "bench_xcend::compute",                  2, 1, nullptr },
     { "aces_v2_jmh",    "bench_aces_v2_jmh",   kAcesV2JmhSource,     nullptr,
-      "bench_aces_v2_jmh::compute",            3, 3 },
+      "bench_aces_v2_jmh::compute",            3, 3, nullptr },
     //
     // Full ACES v2 OutputTransform (Rec.709): aces_to_JMh →
     // tonemapAndCompress_fwd → gamutMap_fwd → JMh_to_output_XYZ.
@@ -252,7 +257,20 @@ static const BenchmarkProgram kPrograms[] =
     // introduced by the gamut-mapper landing (Apr 2026).
     //
     { "aces_v2_full",   "aces_combined",       nullptr,              "aces_combined.ctl",
-      "::main",                                3, 3 },
+      "::main",                                3, 3, nullptr },
+#ifdef CTL_METAL_BENCHMARK_HAS_ACES_IMPORTED
+    //
+    // Multi-import top-level transform: a real production .ctl whose
+    // `import` statements pull four library modules at parse time.
+    // Complement to aces_v2_full, which is hand-flattened against the
+    // same algorithm and so doesn't exercise the import path. main
+    // signature is 4-in / 4-out (the fourth lane is a defaulted alpha;
+    // the harness writes random data into all four).
+    //
+    { "aces_v2_imported", "Output.Academy.Rec709", nullptr,
+      "aces_imported/Output.Academy.Rec709-D65_100nit_in_Rec709-D65_BT1886.ctl",
+      "::main",                                4, 4, "aces_imported" },
+#endif
 };
 
 //
@@ -278,7 +296,28 @@ primeInterpreter(Interp &interp,
         // cwd that ctest launches from. Two-arg overload pins the
         // module name so `::main` resolves under that module regardless
         // of any autoloaded filename-based name.
-        interp.loadFile(prog.sourcePath, prog.moduleName);
+        //
+        // For fixtures with `import` statements, swap the interpreter's
+        // module search path to the staged-fixture directory while the
+        // file is parsed, then restore. setModulePaths is a static
+        // class-level getter/setter; saving and restoring keeps the
+        // change scoped to this single program even though the rest of
+        // the harness runs through the same process.
+        std::vector<std::string> savedPaths;
+        const bool swapPaths = (prog.modulePath != nullptr);
+        if (swapPaths) {
+            savedPaths = Ctl::Interpreter::modulePaths();
+            Ctl::Interpreter::setModulePaths({ prog.modulePath });
+        }
+        try {
+            interp.loadFile(prog.sourcePath, prog.moduleName);
+        } catch (...) {
+            if (swapPaths)
+                Ctl::Interpreter::setModulePaths(savedPaths);
+            throw;
+        }
+        if (swapPaths)
+            Ctl::Interpreter::setModulePaths(savedPaths);
     }
     fn = interp.newFunctionCall(prog.function);
     REQUIRE(fn);
