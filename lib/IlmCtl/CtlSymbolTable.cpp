@@ -300,7 +300,7 @@ SymbolTable::defineSymbol (const string &name, const SymbolInfoPtr &info)
 
 
 string
-SymbolTable::getAbsoluteName (const string &name)
+SymbolTable::getAbsoluteName (const string &name) const
 {
     debug ("SymbolTable::getAbsoluteName (name = " << name << ")");
 

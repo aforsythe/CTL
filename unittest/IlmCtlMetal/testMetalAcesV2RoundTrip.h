@@ -1,0 +1,11 @@
+///////////////////////////////////////////////////////////////////////////
+// Copyright Contributors to the CTL project.
+// SPDX-License-Identifier: BSD-3-Clause
+///////////////////////////////////////////////////////////////////////////
+
+#ifndef CTL_TEST_METAL_ACES_V2_ROUND_TRIP_H
+#define CTL_TEST_METAL_ACES_V2_ROUND_TRIP_H
+
+void testMetalAcesV2RoundTrip();
+
+#endif

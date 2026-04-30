@@ -60,6 +60,7 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <CtlRcPtr.h>
 #include <CtlInterpreter.h>
 #include <CtlFunctionCall.h>
@@ -104,6 +105,15 @@ struct InterpreterCache
 struct MetalInterpreterCache
 {
     std::map<std::string, std::unique_ptr<Ctl::MetalInterpreter>> byFilename;
+    // Guards `byFilename` + per-entry lazy construction under -jobs>1 on
+    // the Metal backend. Workers may hit this concurrently with different
+    // filenames (different slots) or the same filename (second caller
+    // sees a populated slot). The critical-section span is short: the
+    // lookup itself plus the first-time `loadFile` for a given key, which
+    // is O(seconds) but runs exactly once per distinct `.ctl`. Subsequent
+    // per-file work (kernel dispatch) happens outside this lock — it's
+    // serialized by a per-interpreter mutex inside MetalInterpreter.
+    std::mutex cacheMutex;
     MetalInterpreterCache();
     ~MetalInterpreterCache();
 
