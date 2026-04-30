@@ -154,11 +154,11 @@ set(CMAKE_CXX_FLAGS_ASAN
 #                    on x86_64 it enables AVX2/AVX-512 when the build host
 #                    supports them.  Unlocks autovectorization of the
 #                    SimdUnary/Binary ALU inner loops.
-#   CTL_LTO          Link-time optimization (-flto=thin).  The SIMD
-#                    interpreter instantiates SimdUnaryOpInst/SimdBinary
-#                    OpInst hundreds of times across CtlSimdType.cpp; LTO
-#                    inlines the per-type Op<> template across TU
-#                    boundaries.
+#   CTL_LTO          Link-time optimization (-flto=thin on Clang/AppleClang,
+#                    -flto on GCC).  The SIMD interpreter instantiates
+#                    SimdUnaryOpInst/SimdBinaryOpInst hundreds of times
+#                    across CtlSimdType.cpp; LTO inlines the per-type Op<>
+#                    template across TU boundaries.
 #   CTL_HIDDEN_VISIBILITY
 #                    Build with -fvisibility=hidden and
 #                    -fvisibility-inlines-hidden so all symbols default to
@@ -174,7 +174,7 @@ set(CMAKE_CXX_FLAGS_ASAN
 option(CTL_NATIVE_ARCH
   "Emit host-specific ISA (-mcpu=native on Apple, -march=native elsewhere) in Release builds"
   ON)
-option(CTL_LTO "Link-time optimization (-flto=thin) in Release builds" ON)
+option(CTL_LTO "Link-time optimization (-flto=thin on Clang, -flto on GCC) in Release builds" ON)
 option(CTL_HIDDEN_VISIBILITY
   "-fvisibility=hidden + -fvisibility-inlines-hidden in Release builds"
   ON)
@@ -298,8 +298,14 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
     endif()
   endif()
   if(CTL_LTO)
-    add_compile_options($<$<CONFIG:Release>:-flto=thin>)
-    add_link_options($<$<CONFIG:Release>:-flto=thin>)
+    # -flto=thin is Clang/AppleClang-specific; GCC only understands -flto.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      set(_ctl_lto_flag "-flto=thin")
+    else()
+      set(_ctl_lto_flag "-flto")
+    endif()
+    add_compile_options($<$<CONFIG:Release>:${_ctl_lto_flag}>)
+    add_link_options($<$<CONFIG:Release>:${_ctl_lto_flag}>)
   endif()
   if(CTL_HIDDEN_VISIBILITY)
     add_compile_options(

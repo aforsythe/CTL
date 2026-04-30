@@ -870,22 +870,40 @@ SimdAssignArrayInst::execute
     const SimdReg &in = xcontext.stack().regSpRelative(-1);
     SimdReg &out = xcontext.stack().regSpRelative(-2);
 
+    const size_t elemBytes = _size * _opTypeSize;
+
     if (in.isVarying() || mask.isVarying())
     {
-	out.setVarying (true);
-	for( int j = 0; j < xcontext.regSize(); j++)
+	if (!mask.isVarying() &&
+	    !in.isReference() &&
+	    !out.isReference() &&
+	    (in[1] - in[0] == (int)elemBytes))
 	{
-	    if(mask[j])
-	    {
-		memcpy(out[j], in[j], _size*_opTypeSize);
-	    }
+	    // Uniform mask, contiguous in/out: one big memcpy beats
+	    // regSize per-lane memcpys of elemBytes (12 B for float[3],
+	    // 36 B for M33f) by eliminating the per-call platform_memmove
+	    // dispatch on every lane.
 
+	    if (!out.isVarying())
+		out.setVaryingDiscardData (true);
+	    memcpy (out[0], in[0], xcontext.regSize() * elemBytes);
+	}
+	else
+	{
+	    out.setVarying (true);
+	    for (int j = 0; j < xcontext.regSize(); j++)
+	    {
+		if (mask[j])
+		{
+		    memcpy (out[j], in[j], elemBytes);
+		}
+	    }
 	}
     }
     else
     {
 	out.setVarying (false);
-	memcpy( out[0], in[0], _size*_opTypeSize);
+	memcpy (out[0], in[0], elemBytes);
     }
     xcontext.stack().pop (2);
 }
