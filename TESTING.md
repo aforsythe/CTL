@@ -23,10 +23,31 @@ integrators who want to review or adopt the work in smaller pieces.
 ## If you're on this branch (`ship/cpu-perf`)
 
 This branch contains CPU-side performance work only: vectorized
-stdlib transcendentals (Apple Accelerate or sleef), threaded tile
-dispatch, file-level `-jobs`, host-native arch + thin LTO + hidden
-visibility + profile-guided optimization, and a `-pixel` CLI mode
-for single-pixel transforms.  No Metal GPU backend.
+stdlib transcendentals (Apple Accelerate or sleef), batched
+broadcast for two-arg math when one argument is uniform, contiguous
+fast path for whole-array assignment, threaded tile dispatch,
+file-level `-jobs`, host-native arch + thin LTO + hidden visibility
++ profile-guided optimization, a `-pixel` CLI mode for single-pixel
+transforms, and the `-no-batch-math` runtime toggle described
+below.  No Metal GPU backend.
+
+### Reference math via `-no-batch-math`
+
+`ctlrender -no-batch-math …` makes the SIMD interpreter skip the
+Accelerate/SLEEF batched transcendental dispatch and route every
+stdlib math call through the per-element scalar libm path instead.
+Useful as a same-binary reference baseline when diffing against the
+optimized path:
+
+```bash
+./build/ctlrender/ctlrender                 -ctl <your.ctl> in.exr ref.tiff      # batched math (default)
+./build/ctlrender/ctlrender -no-batch-math  -ctl <your.ctl> in.exr scalar.tiff   # scalar libm path
+```
+
+The flag is parsed but warns-and-ignores on a Metal-backend build,
+since it only affects CPU SIMD dispatch.  This is the runtime
+counterpart of the compile-time `-DCTL_USE_ACCELERATE=OFF
+-DCTL_USE_SLEEF=OFF` opt-out — same effect, no rebuild.
 
 ### Build and test
 
@@ -66,8 +87,12 @@ Keep everything inside your checkout.
 -DCTL_NATIVE_ARCH=OFF        # portable-arch build (older hardware)
 -DCTL_LTO=OFF                # disable thin LTO
 -DCTL_HIDDEN_VISIBILITY=OFF  # if you're building SHARED libs for an external ABI
--DCTL_USE_ACCELERATE=OFF -DCTL_USE_SLEEF=OFF   # scalar libm (bit-exact to pre-branch master)
+-DCTL_USE_ACCELERATE=OFF -DCTL_USE_SLEEF=OFF   # scalar libm at compile time
 ```
+
+For an A/B without a rebuild, pass `-no-batch-math` on the
+command line — same effect as the `-DCTL_USE_*=OFF` build flags
+but selectable per invocation.
 
 ### Reporting results
 
@@ -86,5 +111,6 @@ transform used, and the measured wall-time.  File an issue at
 - Builds on every tier-1 target (Linux, Windows, macOS Intel, macOS
   Apple Silicon).
 - Bit-exact against pre-branch master on the default build (no
-  Accelerate / sleef).
+  Accelerate / sleef), and bit-exact again at runtime under
+  `-no-batch-math`.
 - ≤1 ULP per transcendental on the vectorized path.
