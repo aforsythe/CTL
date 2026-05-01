@@ -80,6 +80,7 @@
 #endif
 
 extern int num_threads;
+extern int no_batch_math;
 
 // Note: CTLResult definition now lives in transform.hh so that
 // ctlrender-metal's parity.cc can construct CTLResults lists directly.
@@ -331,6 +332,7 @@ void InterpreterCache::preWarm(const char *filename)
     if (!slot)
     {
         slot.reset(new Ctl::SimdInterpreter);
+        slot->setUseBatchedMath(!no_batch_math);
         slot->loadFile(filename);
     }
 }
@@ -438,6 +440,7 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation,
             {
                 auto fresh = std::unique_ptr<Ctl::SimdInterpreter>(
                     new Ctl::SimdInterpreter);
+                fresh->setUseBatchedMath(!no_batch_math);
                 fresh->loadFile(ctl_operation.filename);
                 it = cache->byFilename.emplace(
                     std::string(ctl_operation.filename),

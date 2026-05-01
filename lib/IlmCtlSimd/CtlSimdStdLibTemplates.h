@@ -64,6 +64,7 @@
 
 #include <CtlSimdStdTypes.h>
 #include <CtlSimdCFunc.h>
+#include <CtlSimdInterpreter.h>
 #include <CtlSimdReg.h>
 #include <CtlSimdXContext.h>
 
@@ -130,11 +131,13 @@ simdFunc1Arg (const SimdBoolMask &mask, SimdXContext &xcontext)
     {
 	if (!mask.isVarying() &&
 	    !a1.isReference() &&
-	    !returnValue.isReference())
+	    !returnValue.isReference() &&
+	    xcontext.interpreter().useBatchedMath())
 	{
 	    //
-	    // Mask is uniform and a1 and the return value
-	    // are contiguous in memory.
+	    // Mask is uniform, a1 and the return value are contiguous
+	    // in memory, and the interpreter has batched-math dispatch
+	    // enabled.
 	    //
 
 	    // !returnValue.isReference() already on the guard above, so
@@ -190,11 +193,13 @@ simdFunc2Arg (const SimdBoolMask &mask, SimdXContext &xcontext)
 	if (!mask.isVarying() &&
 	    !a1.isReference() &&
 	    !a2.isReference() &&
-	    !returnValue.isReference())
+	    !returnValue.isReference() &&
+	    xcontext.interpreter().useBatchedMath())
 	{
 	    //
-	    // Mask is uniform and a1, a2 and the return value are
-	    // contiguous in memory.  A1, a2 or both are varying.
+	    // Mask is uniform, a1, a2 and the return value are
+	    // contiguous in memory, and the interpreter has batched-
+	    // math dispatch enabled.  A1, a2 or both are varying.
 	    //
 
 	    // !returnValue.isReference() already on the guard above, so
