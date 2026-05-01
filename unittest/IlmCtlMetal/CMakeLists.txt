@@ -118,6 +118,33 @@ DESTINATION
 	${CMAKE_CURRENT_BINARY_DIR}
 )
 
+# Multi-import top-level fixture for testMetalBenchmark. Stages the
+# upstream Rec.709 output transform plus the four library modules it
+# `import`s at parse time, into a sibling directory the benchmark
+# registers via Interpreter::setModulePaths. Paths assume the matching
+# upstream checkout sits at <Source>/ampas/aces/aces alongside this
+# repo; if absent, the fixture is silently skipped and the benchmark
+# runs without the imported entry.
+set(_aces_imported_src
+	${CMAKE_CURRENT_SOURCE_DIR}/../../../ampas/aces/aces/aces-output/d65/rec709/Output.Academy.Rec709-D65_100nit_in_Rec709-D65_BT1886.ctl)
+set(_aces_imported_lib_dir
+	${CMAKE_CURRENT_SOURCE_DIR}/../../../ampas/aces/aces/aces-core/lib)
+if(EXISTS "${_aces_imported_src}" AND EXISTS "${_aces_imported_lib_dir}")
+	file(COPY
+		${_aces_imported_src}
+		${_aces_imported_lib_dir}/Lib.Academy.Utilities.ctl
+		${_aces_imported_lib_dir}/Lib.Academy.Tonescale.ctl
+		${_aces_imported_lib_dir}/Lib.Academy.OutputTransform.ctl
+		${_aces_imported_lib_dir}/Lib.Academy.DisplayEncoding.ctl
+	DESTINATION
+		${CMAKE_CURRENT_BINARY_DIR}/aces_imported
+	)
+	target_compile_definitions(IlmCtlMetalTest
+		PRIVATE
+			CTL_METAL_BENCHMARK_HAS_ACES_IMPORTED=1
+	)
+endif()
+
 # Nested-VSArray fixture used by testMetalNestedVSArrays. Exercises the
 # `float[][3]` and `float[][][]` shapes (read + write + multi-dim) that
 # the Metal backend emits as flat scalar pointer + length uniforms.

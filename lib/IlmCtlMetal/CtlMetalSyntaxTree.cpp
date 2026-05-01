@@ -26,6 +26,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cctype>
 #include <cstring>
 #include <iostream>
 #include <limits>
@@ -307,6 +308,27 @@ hasAnyVSArrayDim(const Type *type)
         cur = at->elementType().pointer();
     }
     return false;
+}
+
+// True for a non-writable, non-VSArray struct parameter. Such formals
+// emit as `Ptr<i> paramN` (templated pointer) instead of by value, so
+// `Ptr<i>` deduces from each call site's actual address space and the
+// helper avoids cloning the struct into the thread frame on every
+// call. Member access in the body becomes `paramN->field`, and an
+// inner call taking one of the struct's fixed-size array fields as a
+// templated VSArray formal forwards `&((paramN->field)[0]...)`
+// directly without a per-thread materialization copy. Writable struct
+// formals stay on the by-value path; the writeback semantics rely on
+// a thread-local lvalue at the call site.
+//
+bool
+isAggregatePtrFormalCandidate(const Param &p)
+{
+    if (p.isWritable())
+        return false;
+    if (hasAnyVSArrayDim(p.type.pointer()))
+        return false;
+    return dynamic_cast<const StructType *>(p.type.pointer()) != nullptr;
 }
 
 //
@@ -748,8 +770,10 @@ MetalFunctionNode::generateCode(LContext &lcontext)
     //
     std::vector<int> templatedFormalIndices;
     for (size_t i = 0; i < params.size(); ++i) {
-        if (hasAnyVSArrayDim(params[i].type.pointer()) &&
-            !params[i].isWritable()) {
+        const bool vsArray = hasAnyVSArrayDim(params[i].type.pointer());
+        if (vsArray && !params[i].isWritable()) {
+            templatedFormalIndices.push_back(static_cast<int>(i));
+        } else if (isAggregatePtrFormalCandidate(params[i])) {
             templatedFormalIndices.push_back(static_cast<int>(i));
         }
     }
@@ -809,6 +833,21 @@ MetalFunctionNode::generateCode(LContext &lcontext)
                 cg.write(", uint ");
                 cg.write(vsDimLenName(pname, mask, static_cast<int>(d)));
             }
+            continue;
+        }
+        if (isAggregatePtrFormalCandidate(p)) {
+            // Pass struct formals as a templated pointer whose address
+            // space deduces from the actual (`&static76` →
+            // `constant __ODTParams*`, `&p` from a forwarded param →
+            // whatever address space `p` was instantiated in). Skips
+            // the per-call by-value copy that would otherwise clone
+            // the entire aggregate — including any embedded fixed-size
+            // tables — into the function's thread frame. Member access
+            // in the body is rewritten to `param->field`; see
+            // MetalMemberNode::generateCode.
+            cg.write(kPtrTemplateName(static_cast<int>(i)));
+            cg.write(" ");
+            cg.write(pname);
             continue;
         }
         const std::string tname = registerAndNameType(cg, p.type.pointer());
@@ -1550,7 +1589,33 @@ MetalMemberNode::generateCode(LContext &lcontext)
 
     obj->generateCode(lcontext);
     const std::string o = cg.popExpr();
-    cg.pushExpr(o + "." + member);
+
+    // Aggregate-pointer formals (`Ptr<i> paramN`) need `->` for the
+    // leaf field access. Detection mirrors isAggregatePtrFormalCandidate:
+    // obj is a parameter NameNode (`paramN` identifier) whose declared
+    // type is a non-writable struct. Subsequent member accesses on the
+    // returned struct value continue with `.` because the pointer
+    // deref happened at the leaf.
+    bool useArrow = false;
+    if (NameNodePtr nn = obj.cast<NameNode>()) {
+        if (nn->info && !nn->info->isWritable()) {
+            const StructType *st =
+                dynamic_cast<const StructType *>(nn->info->type().pointer());
+            MetalDataAddrPtr addr =
+                nn->info->addr().cast<MetalDataAddr>();
+            if (st && addr) {
+                const std::string &name = addr->mslName();
+                if (name.size() > 5 &&
+                    name.compare(0, 5, "param") == 0 &&
+                    std::isdigit(static_cast<unsigned char>(name[5])))
+                {
+                    useArrow = true;
+                }
+            }
+        }
+    }
+
+    cg.pushExpr(o + (useArrow ? "->" : ".") + member);
 }
 
 //--- SizeNode ---------------------------------------------------------------
@@ -1977,6 +2042,28 @@ MetalCallNode::generateCode(LContext &lcontext)
             } else if (actualIsModuleConstant) {
                 ptrExpr = "((constant const " + leafType +
                           "*)&(" + frag + "))";
+            } else if (!stdlibAddr && !paramWritable) {
+                // Templated user-helper VSArray formal, fixed-size
+                // actual that isn't a top-level module constant
+                // (typical case: a `paramN->TABLE_x` member access on
+                // a templated aggregate-pointer formal). Skip the
+                // per-call materialization and forward the address of
+                // the leaf element so `Ptr<i>` deduces the actual's
+                // address space.
+                std::vector<int> dimsForIdx;
+                ArrayTypePtr dimWalk = actualArr;
+                while (dimWalk) {
+                    if (dimWalk->size() <= 0)
+                        throw IEX_NAMESPACE::LogicExc(
+                            "CTL Metal backend: unexpected VSArray "
+                            "level in caller-side fixed-size array.");
+                    dimsForIdx.push_back(dimWalk->size());
+                    dimWalk = dimWalk->elementType().cast<ArrayType>();
+                }
+                std::string idx;
+                for (size_t k = 0; k < dimsForIdx.size(); ++k)
+                    idx += "[0]";
+                ptrExpr = "&((" + frag + ")" + idx + ")";
             } else {
                 //
                 // Caller is a fully-fixed array — a local, a struct
@@ -2099,6 +2186,39 @@ MetalCallNode::generateCode(LContext &lcontext)
 
             argFragments.push_back(ptrExpr);
             argLenFragments.push_back(lenExprs);
+            continue;
+        }
+
+        if (!stdlibAddr && isAggregatePtrFormalCandidate(params[i])) {
+            // Templated aggregate-pointer formal: pass the address of
+            // the actual so the formal's `Ptr<i>` deduces the actual's
+            // address space. Forwarding from another aggregate-templated
+            // param of the enclosing function (actual is the NameNode of
+            // a `paramN` whose codegen already emits a pointer) keeps
+            // the existing pointer instead of taking `&` and producing
+            // a double pointer.
+            bool isForwardedAggregatePtr = false;
+            if (NameNodePtr nn = argExpr.cast<NameNode>()) {
+                if (nn->info && !nn->info->isWritable()) {
+                    const StructType *st = dynamic_cast<const StructType *>(
+                        nn->info->type().pointer());
+                    MetalDataAddrPtr addr =
+                        nn->info->addr().cast<MetalDataAddr>();
+                    if (st && addr) {
+                        const std::string &name = addr->mslName();
+                        if (name.size() > 5 &&
+                            name.compare(0, 5, "param") == 0 &&
+                            std::isdigit(
+                                static_cast<unsigned char>(name[5])))
+                        {
+                            isForwardedAggregatePtr = true;
+                        }
+                    }
+                }
+            }
+            argFragments.push_back(
+                isForwardedAggregatePtr ? frag : ("&(" + frag + ")"));
+            argLenFragments.push_back(std::vector<std::string>());
             continue;
         }
 
