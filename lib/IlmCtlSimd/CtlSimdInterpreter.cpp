@@ -66,6 +66,7 @@
 #include <CtlSimdReg.h>
 #include <CtlSimdFunctionCall.h>
 #include <Iex.h>
+#include <atomic>
 #include <cassert>
 
 using namespace std;
@@ -79,6 +80,7 @@ struct SimdInterpreter::Data
     std::mutex		mutex;
     unsigned long	maxInstCount;
     unsigned long	abortCount;
+    std::atomic<bool>	useBatchedMath;
 };
 
 
@@ -89,6 +91,7 @@ SimdInterpreter::SimdInterpreter():
 {
     _data->maxInstCount = 100000000;
     _data->abortCount = 0;
+    _data->useBatchedMath.store (true, std::memory_order_relaxed);
 
     //
     // Create a dummy LContext and load the CTL standard library
@@ -157,6 +160,20 @@ SymbolTable &
 SimdInterpreter::symbolTable() const
 {
     return const_cast<SimdInterpreter *>(this)->symtab();
+}
+
+
+void
+SimdInterpreter::setUseBatchedMath (bool enabled)
+{
+    _data->useBatchedMath.store (enabled, std::memory_order_relaxed);
+}
+
+
+bool
+SimdInterpreter::useBatchedMath () const
+{
+    return _data->useBatchedMath.load (std::memory_order_relaxed);
 }
 
 

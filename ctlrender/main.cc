@@ -257,6 +257,13 @@ int num_threads = 0;
 //  >1 => fixed count
 int file_jobs = 0;
 
+// `-no-batch-math` toggle. When non-zero, every SimdInterpreter
+// constructed by the renderer skips the Accelerate/SLEEF batched
+// transcendental dispatch and runs the per-element scalar libm path
+// instead. Useful as a same-binary reference baseline against which
+// the optimized path can be diffed.
+int no_batch_math = 0;
+
 int main(int argc, const char **argv)
 {
 	try
@@ -528,6 +535,10 @@ int main(int argc, const char **argv)
 			else if (!strncmp(argv[0], "-force", 5))
 			{
 				force_overwrite_output_file = TRUE;
+			}
+			else if (!strcmp(argv[0], "-no-batch-math"))
+			{
+				no_batch_math = 1;
 			}
 			else if (!strncmp(argv[0], "-noalpha", 2))
 			{
