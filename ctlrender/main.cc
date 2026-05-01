@@ -257,6 +257,13 @@ int num_threads = 0;
 //  >1 => fixed count
 int file_jobs = 0;
 
+// `-no-batch-math` toggle. When non-zero, every SimdInterpreter
+// constructed by the renderer skips the Accelerate/SLEEF batched
+// transcendental dispatch and runs the per-element scalar libm path
+// instead. Useful as a same-binary reference baseline against which
+// the optimized path can be diffed.
+int no_batch_math = 0;
+
 int main(int argc, const char **argv)
 {
 	try
@@ -529,6 +536,10 @@ int main(int argc, const char **argv)
 			{
 				force_overwrite_output_file = TRUE;
 			}
+			else if (!strcmp(argv[0], "-no-batch-math"))
+			{
+				no_batch_math = 1;
+			}
 			else if (!strncmp(argv[0], "-noalpha", 2))
 			{
 				noalpha = TRUE;
@@ -730,6 +741,20 @@ int main(int argc, const char **argv)
 		}
 
 #ifdef CTL_GPU_BACKEND
+		//
+		// `-no-batch-math` only affects the SIMD interpreter. The Metal
+		// rendering path doesn't run through Accelerate/SLEEF batched
+		// dispatch, so the flag is a no-op for the metal_gpu output.
+		// `--parity-check` still honors it on the CPU reference side.
+		//
+		if (no_batch_math && !parity_check && verbosity > 0)
+		{
+			fprintf(stderr,
+			        "ctlrender-metal: -no-batch-math has no effect on the "
+			        "Metal rendering path; the flag only affects the CPU "
+			        "SIMD interpreter (used by --parity-check).\n");
+		}
+
 		//
 		// --benchmark mode skips file-output entirely: it just times the
 		// Metal transform on each input. We require >=1 input and ignore

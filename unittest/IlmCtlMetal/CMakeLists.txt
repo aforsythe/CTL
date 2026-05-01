@@ -16,6 +16,7 @@ set(SOURCES
 	testMetalIlmCtlFixtures.cpp
 	testMetalLanguageRejections.cpp
 	testMetalLContext.cpp
+	testMetalMixedVSAddrSpaces.cpp
 	testMetalNestedVSArrays.cpp
 	testMetalParity.cpp
 	testMetalReturnValue.cpp
@@ -122,6 +123,16 @@ DESTINATION
 # the Metal backend emits as flat scalar pointer + length uniforms.
 file(COPY
 	${CMAKE_CURRENT_SOURCE_DIR}/nestedVSArrays.ctl
+DESTINATION
+	${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Mixed-address-space VSArray fixture used by testMetalMixedVSAddrSpaces.
+# Drives one helper with both a module-`const` actual and a function-local
+# actual in the same kernel — regression guard for the templated VSArray
+# pointer formal.
+file(COPY
+	${CMAKE_CURRENT_SOURCE_DIR}/mixedVSAddrSpaces.ctl
 DESTINATION
 	${CMAKE_CURRENT_BINARY_DIR}
 )

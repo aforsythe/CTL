@@ -99,6 +99,14 @@ paramMslName(int i)
 }
 
 std::string
+kPtrTemplateName(int i)
+{
+    std::ostringstream s;
+    s << "Ptr" << i;
+    return s.str();
+}
+
+std::string
 argMslName(int i)
 {
     std::ostringstream s;
@@ -731,6 +739,30 @@ MetalFunctionNode::generateCode(LContext &lcontext)
             hasVSArrayParam = true;
     }
 
+    //
+    // Template the helper on the pointer type of each read-only
+    // VSArray formal so a module-`constant` actual flows through
+    // without per-thread materialization while a thread-local actual
+    // still works. Writable formals stay `thread T*` (the writeback
+    // path assumes that address space).
+    //
+    std::vector<int> templatedFormalIndices;
+    for (size_t i = 0; i < params.size(); ++i) {
+        if (hasAnyVSArrayDim(params[i].type.pointer()) &&
+            !params[i].isWritable()) {
+            templatedFormalIndices.push_back(static_cast<int>(i));
+        }
+    }
+    if (!templatedFormalIndices.empty()) {
+        cg.write("template<");
+        for (size_t k = 0; k < templatedFormalIndices.size(); ++k) {
+            if (k > 0) cg.write(", ");
+            cg.write("typename ");
+            cg.write(kPtrTemplateName(templatedFormalIndices[k]));
+        }
+        cg.writeln(">");
+    }
+
     cg.write("static inline void ");
     cg.write(fnName);
     cg.write("(");
@@ -767,9 +799,8 @@ MetalFunctionNode::generateCode(LContext &lcontext)
                 cg.write(" *");
                 cg.write(pname);
             } else {
-                cg.write("thread const ");
-                cg.write(etype);
-                cg.write(" *");
+                cg.write(kPtrTemplateName(static_cast<int>(i)));
+                cg.write(" ");
                 cg.write(pname);
             }
             const std::vector<bool> mask = vsArrayVarMask(p.type.pointer());
@@ -1924,9 +1955,28 @@ MetalCallNode::generateCode(LContext &lcontext)
             const bool callerIsVSArray =
                 hasAnyVSArrayDim(argExpr->type.pointer());
 
+            //
+            // Module-`constant` actuals into a templated user-helper
+            // VSArray formal pass through as a direct constant-pointer
+            // cast — no per-thread materialization. Stdlib helpers
+            // aren't templated, so they always take the
+            // materialization path below.
+            //
+            bool actualIsModuleConstant = false;
+            if (!params[i].isWritable() && !stdlibAddr) {
+                NameNodePtr actualName = argExpr.cast<NameNode>();
+                if (actualName && actualName->info) {
+                    if (actualName->info->addr().cast<MetalStaticAddr>())
+                        actualIsModuleConstant = true;
+                }
+            }
+
             std::string ptrExpr;
             if (callerIsVSArray) {
                 ptrExpr = frag;
+            } else if (actualIsModuleConstant) {
+                ptrExpr = "((constant const " + leafType +
+                          "*)&(" + frag + "))";
             } else {
                 //
                 // Caller is a fully-fixed array — a local, a struct

@@ -86,6 +86,16 @@ struct MetalInterpreter::Data
     MetalSidecarCache   cache;
     bool                cacheValid = false;
     bool                cacheDirty = false;
+    //
+    // Captured by preloadSidecarCache so the destructor can flush any
+    // late dirty bytes (e.g. fallback writes from
+    // `lookupSidecarBytes` triggered by newFunctionCall after the
+    // caller's explicit flushSidecarCache already ran). Without this,
+    // function-parameter default lookups that miss harvest write the
+    // cache in-process but never reach disk, and every subsequent
+    // run pays the warm-cache repair cost.
+    //
+    std::string         topSourcePath;
 };
 
 MetalInterpreter::MetalInterpreter()
@@ -170,6 +180,7 @@ MetalInterpreter::preloadSidecarCache(const std::string &topSourcePath)
     const bool hit = _data->cache.tryLoad(topSourcePath);
     _data->cacheValid = hit;
     _data->cacheDirty = !hit;
+    _data->topSourcePath = topSourcePath;
     if (debugPhase) {
         auto t1 = std::chrono::high_resolution_clock::now();
         double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -312,8 +323,17 @@ MetalInterpreter::lookupSidecarBytes(const std::string &absoluteName,
     // Fallback to the live sidecar. Reached during cold runs when the
     // harvest pass hasn't yet populated a symbol the consumer is
     // asking about, and (post-repair) when the repair load populated
-    // the sidecar's symbol table but the symbol is an alias or
-    // per-invocation computation that doesn't survive harvest.
+    // the sidecar's symbol table but the symbol isn't visible through
+    // the iterable view harvest walks (e.g. function-parameter default
+    // statics like `<func>$<param>`, which lookupSymbol surfaces but
+    // begin()/end() do not).
+    //
+    // Persist the bytes into the cache here so the next process's
+    // preload covers this symbol without firing the warm-cache repair
+    // path. Without this hook, every defaulted-parameter lookup that
+    // misses harvest pays the full sidecar.loadModule cost on every
+    // subsequent fresh process, on the order of hundreds of ms for a
+    // multi-import top-level transform.
     //
     if (!_data->sidecar) return nullptr;
     SymbolInfoPtr sym = _data->sidecar->symbolTable().lookupSymbol(absoluteName);
@@ -323,11 +343,25 @@ MetalInterpreter::lookupSidecarBytes(const std::string &absoluteName,
     DataTypePtr dt = sym->dataType();
     if (!dt) return nullptr;
     byteCountOut = dt->objectSize();
-    return (*addr->reg())[0];
+    const char *fallbackBytes = (*addr->reg())[0];
+    _data->cache.add(absoluteName, fallbackBytes, byteCountOut);
+    _data->cacheDirty = true;
+    return fallbackBytes;
 }
 
 MetalInterpreter::~MetalInterpreter()
 {
+    //
+    // Flush any cache writes that landed after the caller's explicit
+    // flushSidecarCache (e.g. fallback writes triggered by
+    // newFunctionCall-time default-parameter lookups). The cache
+    // tracks dirty state internally; this is a no-op when nothing
+    // late slipped in.
+    //
+    if (_data && _data->cacheDirty && !_data->topSourcePath.empty()) {
+        try { flushSidecarCache(_data->topSourcePath); }
+        catch (...) {}
+    }
     delete _data;
 }
 

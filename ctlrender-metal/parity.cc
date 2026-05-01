@@ -167,7 +167,9 @@ int run_parity_check(const char *inputFile, const char *outputFile,
     populate_inputs(cpu_results, image_buffer);
     populate_inputs(gpu_results, image_buffer);
 
+    extern int no_batch_math;
     Ctl::SimdInterpreter cpu_interp;
+    cpu_interp.setUseBatchedMath(!no_batch_math);
     Ctl::MetalInterpreter gpu_interp;
 
     run_chain(cpu_interp, cpu_results, ctl_operations, global_parameters,
