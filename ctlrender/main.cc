@@ -742,6 +742,20 @@ int main(int argc, const char **argv)
 
 #ifdef CTL_GPU_BACKEND
 		//
+		// `-no-batch-math` only affects the SIMD interpreter. The Metal
+		// rendering path doesn't run through Accelerate/SLEEF batched
+		// dispatch, so the flag is a no-op for the metal_gpu output.
+		// `--parity-check` still honors it on the CPU reference side.
+		//
+		if (no_batch_math && !parity_check && verbosity > 0)
+		{
+			fprintf(stderr,
+			        "ctlrender-metal: -no-batch-math has no effect on the "
+			        "Metal rendering path; the flag only affects the CPU "
+			        "SIMD interpreter (used by --parity-check).\n");
+		}
+
+		//
 		// --benchmark mode skips file-output entirely: it just times the
 		// Metal transform on each input. We require >=1 input and ignore
 		// any trailing path. No format validation, no output overwriting

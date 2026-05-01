@@ -52,7 +52,9 @@ evaluating; it would place the binaries in system directories
 CPU SIMD interpreter performance work:
 
 - Vectorized stdlib transcendentals (Apple Accelerate on macOS, sleef
-  cross-platform).
+  cross-platform), with broadcast for two-arg math when one argument
+  is uniform.
+- Contiguous fast path for whole-array assignment.
 - Threaded tile dispatch + file-level `-jobs N`.
 - Host-native ISA (`-mcpu=native`), thin LTO, hidden visibility, and
   profile-guided optimization as defaults.
@@ -61,6 +63,12 @@ CPU SIMD interpreter performance work:
 - Inline-substitution of idiomatic `Lib.Academy.Utilities` helpers
   (min/max/clip/copysign/wrap_to_360/radians_to_degrees/degrees_to_radians)
   routed through the SIMD interpreter's batched-math path.
+- `-no-batch-math` runtime toggle that bypasses the Accelerate/SLEEF
+  batched transcendentals and routes every stdlib math call through
+  the per-element scalar libm path. Same-binary reference baseline
+  for diffing against the optimized path; runtime counterpart of
+  the compile-time `-DCTL_USE_ACCELERATE=OFF -DCTL_USE_SLEEF=OFF`
+  opt-out.
 
 ### `ship/ctl-debugger`
 
@@ -117,6 +125,24 @@ CTL_METAL_TIMING=1 ./build/ctlrender-metal/ctlrender-metal \
 End-to-end parity bounds documented in
 [`lib/IlmCtlMetal/PRECISION.md`](lib/IlmCtlMetal/PRECISION.md).
 
+Recent codegen / dispatch landings on this branch:
+
+- Templated VSArray pointer formals for read-only helpers, so a
+  module-`constant` actual flows through to the helper as a direct
+  `constant const T*` cast instead of materializing into thread
+  storage at every kernel-wrapper call. Helpers with thread-local
+  fixed-size actuals keep their existing materialization path.
+- Sidecar fallback bytes are persisted to the on-disk cache the
+  first time they're requested, so warm-cache invocations skip the
+  full sidecar.loadModule repair path.
+- `-no-batch-math` is honored by the CPU reference interpreter that
+  `--parity-check` constructs, so a parity run on this binary lets
+  you choose between the optimized CPU path and the scalar-libm
+  reference as the "ground truth" being compared against the GPU
+  output. The flag is otherwise a no-op on the metal_gpu rendering
+  path, with a one-line stderr warning to that effect (suppressed
+  under `-quiet`).
+
 ## Code coverage
 
 ctltest can produce statement-level coverage of `.ctl` modules in lcov
@@ -145,8 +171,13 @@ local + CI usage and known limitations.
 -DCTL_NATIVE_ARCH=OFF                          # portable-arch build
 -DCTL_LTO=OFF                                  # disable thin LTO
 -DCTL_HIDDEN_VISIBILITY=OFF                    # if building SHARED libs for an external ABI
--DCTL_USE_ACCELERATE=OFF -DCTL_USE_SLEEF=OFF   # scalar libm (bit-exact to pre-branch master)
+-DCTL_USE_ACCELERATE=OFF -DCTL_USE_SLEEF=OFF   # scalar libm at compile time
 ```
+
+For an A/B without a rebuild, pass `-no-batch-math` on the command
+line — same effect as the `-DCTL_USE_*=OFF` build flags but
+selectable per invocation.  Honored by `ctlrender` and by
+`ctlrender-metal --parity-check` (CPU reference interpreter).
 
 ## Reporting results
 
