@@ -16,6 +16,7 @@
 #include "testMetalIlmCtlFixtures.h"
 #include "testMetalLanguageRejections.h"
 #include "testMetalLContext.h"
+#include "testMetalMixedVSAddrSpaces.h"
 #include "testMetalNestedVSArrays.h"
 #include "testMetalParity.h"
 #include "testMetalReturnValue.h"
@@ -47,6 +48,7 @@ main(int argc, char *argv[])
     TEST(testMetalIlmCtlFixtures);
     TEST(testMetalLanguageRejections);
     TEST(testMetalLContext);
+    TEST(testMetalMixedVSAddrSpaces);
     TEST(testMetalNestedVSArrays);
     TEST(testMetalParity);
     TEST(testMetalReturnValue);

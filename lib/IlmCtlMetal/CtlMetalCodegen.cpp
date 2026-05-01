@@ -10,6 +10,9 @@
 #include <Iex.h>
 
 #include <cstdio>
+#include <map>
+#include <queue>
+#include <set>
 #include <sstream>
 
 namespace Ctl {
@@ -2883,6 +2886,166 @@ emitHalfExpLogSection()
     return cached;
 }
 
+namespace {
+
+//
+// Drop user helpers that are unreachable from any kernel wrapper. A
+// loaded module typically contains helpers that are only used by the
+// host-side sidecar interpreter to evaluate module-scope `const`
+// initializers; emitting them into MSL inflates compile time and
+// can introduce address-space conflicts with the runtime-reachable
+// templated VSArray formals. Stdlib helpers live in the preamble and
+// are not subject to pruning.
+//
+
+struct ParsedHelper
+{
+    std::string name;
+    std::string text;
+    std::set<std::string> callees;
+};
+
+void
+collectCallees(const std::string &text, std::set<std::string> &out)
+{
+    const std::string prefix = "__ctl_";
+    size_t pos = 0;
+    while ((pos = text.find(prefix, pos)) != std::string::npos) {
+        size_t nameStart = pos;
+        size_t nameEnd = nameStart;
+        while (nameEnd < text.size()) {
+            char c = text[nameEnd];
+            if (!(isalnum(static_cast<unsigned char>(c)) || c == '_'))
+                break;
+            ++nameEnd;
+        }
+        if (nameEnd < text.size() && text[nameEnd] == '(')
+            out.insert(text.substr(nameStart, nameEnd - nameStart));
+        pos = nameEnd;
+    }
+}
+
+std::vector<ParsedHelper>
+parseHelpers(const std::string &body)
+{
+    std::vector<ParsedHelper> helpers;
+    const std::string sigPrefix = "static inline ";
+    size_t pos = 0;
+    while (pos < body.size()) {
+        size_t sigStart = body.find(sigPrefix, pos);
+        if (sigStart == std::string::npos) break;
+        if (sigStart != 0 && body[sigStart - 1] != '\n') {
+            pos = sigStart + sigPrefix.size();
+            continue;
+        }
+        // If a `template<...>` line precedes the signature, include
+        // it in the helper's text span so the prefix survives pruning.
+        size_t helperStart = sigStart;
+        if (sigStart >= 2) {
+            size_t prevLineEnd = sigStart - 1;
+            size_t prevLineStart = prevLineEnd;
+            while (prevLineStart > 0 && body[prevLineStart - 1] != '\n')
+                --prevLineStart;
+            const std::string templatePrefix = "template<";
+            if (prevLineEnd > prevLineStart &&
+                body.compare(prevLineStart, templatePrefix.size(),
+                             templatePrefix) == 0) {
+                helperStart = prevLineStart;
+            }
+        }
+        size_t parenOpen = body.find('(', sigStart);
+        if (parenOpen == std::string::npos) break;
+        size_t nameEnd = parenOpen;
+        size_t nameStart = nameEnd;
+        while (nameStart > sigStart) {
+            char c = body[nameStart - 1];
+            if (isalnum(static_cast<unsigned char>(c)) || c == '_')
+                --nameStart;
+            else
+                break;
+        }
+        std::string name = body.substr(nameStart, nameEnd - nameStart);
+        if (name.compare(0, 6, "__ctl_") != 0) {
+            pos = parenOpen + 1;
+            continue;
+        }
+        size_t braceOpen = body.find('{', parenOpen);
+        if (braceOpen == std::string::npos) break;
+        int depth = 1;
+        size_t i = braceOpen + 1;
+        while (i < body.size() && depth > 0) {
+            char c = body[i];
+            if (c == '{') ++depth;
+            else if (c == '}') --depth;
+            ++i;
+        }
+        if (depth != 0) break;
+        size_t bodyEnd = i;
+        if (bodyEnd < body.size() && body[bodyEnd] == '\n')
+            ++bodyEnd;
+
+        ParsedHelper h;
+        h.name = std::move(name);
+        h.text = body.substr(helperStart, bodyEnd - helperStart);
+        std::set<std::string> callees;
+        collectCallees(h.text, callees);
+        callees.erase(h.name);
+        h.callees = std::move(callees);
+        helpers.push_back(std::move(h));
+
+        pos = bodyEnd;
+    }
+    return helpers;
+}
+
+std::string
+prunedBody(const std::string &body,
+           const std::vector<const std::string *> &rootBodies)
+{
+    if (body.empty()) return body;
+
+    std::vector<ParsedHelper> helpers = parseHelpers(body);
+    if (helpers.empty()) return body;
+
+    std::map<std::string, const ParsedHelper *> byName;
+    for (const ParsedHelper &h : helpers)
+        byName[h.name] = &h;
+
+    std::set<std::string> reachable;
+    std::queue<std::string> work;
+    for (const std::string *rb : rootBodies) {
+        std::set<std::string> rootCallees;
+        collectCallees(*rb, rootCallees);
+        for (const std::string &c : rootCallees) {
+            if (byName.count(c) && reachable.insert(c).second)
+                work.push(c);
+        }
+    }
+
+    while (!work.empty()) {
+        std::string n = work.front();
+        work.pop();
+        const ParsedHelper *h = byName[n];
+        if (!h) continue;
+        for (const std::string &c : h->callees) {
+            if (byName.count(c) && reachable.insert(c).second)
+                work.push(c);
+        }
+    }
+
+    // Reassemble in original emission order so forward-declared type
+    // dependencies between helpers are preserved.
+    std::string out;
+    out.reserve(body.size());
+    for (const ParsedHelper &h : helpers) {
+        if (reachable.count(h.name))
+            out += h.text;
+    }
+    return out;
+}
+
+} // anonymous namespace
+
 std::string
 MetalCodegen::source() const
 {
@@ -2890,19 +3053,25 @@ MetalCodegen::source() const
     if (_halfExpLogUsed)
         halfSection = emitHalfExpLogSection();
 
+    std::vector<const std::string *> roots;
+    for (const auto &kv : _kernelWrappers)
+        roots.push_back(&kv.second);
+    std::string filteredBody = roots.empty() ? _body
+                                             : prunedBody(_body, roots);
+
     size_t kernelBytes = 0;
     for (const auto &kv : _kernelWrappers)
         kernelBytes += kv.second.size();
 
     std::string out;
-    out.reserve(_header.size() + _body.size() + halfSection.size()
+    out.reserve(_header.size() + filteredBody.size() + halfSection.size()
                 + kernelBytes + 64);
     out += kPreamble;
     out += halfSection;
     out += _header;
     if (!_header.empty() && _header.back() != '\n')
         out += '\n';
-    out += _body;
+    out += filteredBody;
     for (const auto &kv : _kernelWrappers)
         out += kv.second;
     return out;
@@ -2919,15 +3088,19 @@ MetalCodegen::sourceForKernel(const std::string &kernelName) const
     if (_halfExpLogUsed)
         halfSection = emitHalfExpLogSection();
 
+    std::vector<const std::string *> roots;
+    roots.push_back(&it->second);
+    std::string filteredBody = prunedBody(_body, roots);
+
     std::string out;
-    out.reserve(_header.size() + _body.size() + halfSection.size()
+    out.reserve(_header.size() + filteredBody.size() + halfSection.size()
                 + it->second.size() + 64);
     out += kPreamble;
     out += halfSection;
     out += _header;
     if (!_header.empty() && _header.back() != '\n')
         out += '\n';
-    out += _body;
+    out += filteredBody;
     out += it->second;
     return out;
 }

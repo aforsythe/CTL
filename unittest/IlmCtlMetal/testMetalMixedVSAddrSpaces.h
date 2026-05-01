@@ -1,0 +1,11 @@
+///////////////////////////////////////////////////////////////////////////
+// Copyright Contributors to the CTL project.
+// SPDX-License-Identifier: BSD-3-Clause
+///////////////////////////////////////////////////////////////////////////
+
+#ifndef CTL_TEST_METAL_MIXED_VS_ADDR_SPACES_H
+#define CTL_TEST_METAL_MIXED_VS_ADDR_SPACES_H
+
+void testMetalMixedVSAddrSpaces();
+
+#endif
