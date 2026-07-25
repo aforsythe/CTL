@@ -621,6 +621,107 @@ const char *kStdLookup3DHSource =
     "}\n";
 
 //
+// `stdlkup3dtf3` exercises `lookup3DTetra_f3` — the tetrahedral
+// variant of `lookup3D_f3`. Same table and probe pattern as the
+// trilinear fixture; the table is non-planar inside each cell, so
+// tetrahedral and trilinear results genuinely differ and this fixture
+// validates the tetrahedral blend itself, not a shared code path.
+// The probe coordinates are decorrelated and scaled so the 1024
+// makeSamples entries hit every one of the six tetrahedra (85+
+// samples each) plus the boundary-clamp/tie paths — the trilinear
+// fixtures' `(a+b)*0.25` third coordinate correlates with the first
+// two and leaves one tetrahedron completely unsampled. Target 0 ULP
+// — the tetrahedron selection is exact comparisons and the four-term
+// blend mirrors the CPU's discrete fsub/fmul/fadd sequence.
+//
+const char *kStdLookup3DTetraF3Source =
+    "namespace stdlkup3dtf3\n"
+    "{\n"
+    "    void compute(input varying float a,\n"
+    "                 input varying float b,\n"
+    "                 input varying int i,\n"
+    "                 output varying float out)\n"
+    "    {\n"
+    "        float f[2][2][2][3] = {\n"
+    "            {{{0.0, 0.0, 0.0}, {1.0, 0.1, 0.2}},\n"
+    "             {{0.1, 1.0, 0.3}, {1.0, 1.0, 0.4}}},\n"
+    "            {{{0.2, 0.3, 1.0}, {1.0, 0.4, 1.0}},\n"
+    "             {{0.5, 1.0, 1.0}, {1.0, 1.0, 1.0}}}\n"
+    "        };\n"
+    "        float pMin[3] = {-1.0, -1.0, -1.0};\n"
+    "        float pMax[3] = { 1.0,  1.0,  1.0};\n"
+    "        float fi = i;\n"
+    "        float p[3] = {a * 0.09 + fi * 0.011,\n"
+    "                      b * 0.07 - fi * 0.013,\n"
+    "                      a * 0.05 - b * 0.06 + fi * 0.017};\n"
+    "        float r[3] = lookup3DTetra_f3(f, pMin, pMax, p);\n"
+    "        out = r[0] * 0.37 + r[1] * 0.41 + r[2] * 0.22;\n"
+    "    }\n"
+    "}\n";
+
+//
+// `stdlkup3dtf` exercises `lookup3DTetra_f` — scalar-in, scalar-out
+// ABI over the same tetrahedral core. Target 0 ULP because the MSL
+// helper delegates to `ctl_stdlib_lookup3DTetra_f3` unchanged.
+//
+const char *kStdLookup3DTetraFSource =
+    "namespace stdlkup3dtf\n"
+    "{\n"
+    "    void compute(input varying float a,\n"
+    "                 input varying float b,\n"
+    "                 input varying int i,\n"
+    "                 output varying float out)\n"
+    "    {\n"
+    "        float f[2][2][2][3] = {\n"
+    "            {{{0.0, 0.0, 0.0}, {1.0, 0.1, 0.2}},\n"
+    "             {{0.1, 1.0, 0.3}, {1.0, 1.0, 0.4}}},\n"
+    "            {{{0.2, 0.3, 1.0}, {1.0, 0.4, 1.0}},\n"
+    "             {{0.5, 1.0, 1.0}, {1.0, 1.0, 1.0}}}\n"
+    "        };\n"
+    "        float pMin[3] = {-1.0, -1.0, -1.0};\n"
+    "        float pMax[3] = { 1.0,  1.0,  1.0};\n"
+    "        float fi = i;\n"
+    "        float p0 = a * 0.09 + fi * 0.011;\n"
+    "        float p1 = b * 0.07 - fi * 0.013;\n"
+    "        float p2 = a * 0.05 - b * 0.06 + fi * 0.017;\n"
+    "        float q0; float q1; float q2;\n"
+    "        lookup3DTetra_f(f, pMin, pMax, p0, p1, p2, q0, q1, q2);\n"
+    "        out = q0 * 0.37 + q1 * 0.41 + q2 * 0.22;\n"
+    "    }\n"
+    "}\n";
+
+//
+// `stdlkup3dth` exercises `lookup3DTetra_h` — half scalar coords and
+// output refs around the float-precision tetrahedral core. Same
+// half↔float boundary analysis as `lookup3D_h`; target 0 ULP.
+//
+const char *kStdLookup3DTetraHSource =
+    "namespace stdlkup3dth\n"
+    "{\n"
+    "    void compute(input varying float a,\n"
+    "                 input varying float b,\n"
+    "                 input varying int i,\n"
+    "                 output varying float out)\n"
+    "    {\n"
+    "        float f[2][2][2][3] = {\n"
+    "            {{{0.0, 0.0, 0.0}, {1.0, 0.1, 0.2}},\n"
+    "             {{0.1, 1.0, 0.3}, {1.0, 1.0, 0.4}}},\n"
+    "            {{{0.2, 0.3, 1.0}, {1.0, 0.4, 1.0}},\n"
+    "             {{0.5, 1.0, 1.0}, {1.0, 1.0, 1.0}}}\n"
+    "        };\n"
+    "        float pMin[3] = {-1.0, -1.0, -1.0};\n"
+    "        float pMax[3] = { 1.0,  1.0,  1.0};\n"
+    "        float fi = i;\n"
+    "        half p0 = a * 0.09 + fi * 0.011;\n"
+    "        half p1 = b * 0.07 - fi * 0.013;\n"
+    "        half p2 = a * 0.05 - b * 0.06 + fi * 0.017;\n"
+    "        half q0; half q1; half q2;\n"
+    "        lookup3DTetra_h(f, pMin, pMax, p0, p1, p2, q0, q1, q2);\n"
+    "        out = q0 * 0.37 + q1 * 0.41 + q2 * 0.22;\n"
+    "    }\n"
+    "}\n";
+
+//
 // `stdluv` exercises `LuvtoXYZ(f3, f3)`. Pure rational + t*t*t,
 // no transcendentals — target 0 ULP.
 //
@@ -1555,6 +1656,15 @@ testMetalArithmetic()
     runFixture("stdlib lookup3D_h",
                "stdlkup3dh", kStdLookup3DHSource,
                "stdlkup3dh::compute", samples);
+    runFixture("stdlib lookup3DTetra_f3",
+               "stdlkup3dtf3", kStdLookup3DTetraF3Source,
+               "stdlkup3dtf3::compute", samples);
+    runFixture("stdlib lookup3DTetra_f",
+               "stdlkup3dtf", kStdLookup3DTetraFSource,
+               "stdlkup3dtf::compute", samples);
+    runFixture("stdlib lookup3DTetra_h",
+               "stdlkup3dth", kStdLookup3DTetraHSource,
+               "stdlkup3dth::compute", samples);
     runFixture("stdlib LuvtoXYZ",
                "stdluv", kStdLuvToXyzSource,
                "stdluv::compute", samples);
