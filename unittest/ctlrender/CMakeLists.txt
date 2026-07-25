@@ -346,11 +346,18 @@ endif()
 
 # -threads x -compression interaction: each compression codec sees a
 # different chunk-size / encoder, and the per-tile pixel batches arrive
-# from worker threads.  Verify byte-identical output across N=1 vs N=4
-# for a representative set of codecs (lossless block, lossless wavelet,
-# lossy DCT).
+# from worker threads.  Verify byte-identical output across N=1 vs N=4.
+#
+# Lossless codecs only (block and wavelet).  Byte-identity here is a
+# statement about the pixels ctlrender hands to OpenEXR, and a lossless
+# codec turns any difference in those pixels into a difference in the file.
+# dwaa was in this list, but a lossy DCT encoder is not required to be
+# reproducible between two separate invocations, and on armv7 it is not:
+# the file differs while zip, zips and piz all match, which is precisely
+# the evidence that the pixels are identical and the variation is inside
+# OpenEXR.  DWAA itself stays covered by the codec test above.
 if(OpenEXR_FOUND)
-    foreach(C zip zips piz dwaa)
+    foreach(C zip zips piz)
         set(REF "${CTLRENDER_OUTPUT_FOLDER}/threads_compression_${C}_ref.exr")
         set(OUT "${CTLRENDER_OUTPUT_FOLDER}/threads_compression_${C}_t4.exr")
         add_test(NAME "ctlrender-threads-compression-${C}-ref"
