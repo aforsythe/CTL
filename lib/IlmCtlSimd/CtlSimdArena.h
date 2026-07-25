@@ -3,7 +3,7 @@
 // ("A.M.P.A.S."). Portions contributed by others as indicated.
 // All rights reserved.
 //
-// (License text omitted for brevity — see CtlSimdReg.h for the full
+// (License text omitted for brevity -- see CtlSimdReg.h for the full
 // ASWF BSD-style license that governs this file.)
 ///////////////////////////////////////////////////////////////////////////
 
@@ -13,25 +13,25 @@
 
 //-----------------------------------------------------------------------------
 //
-//	class SimdArena — per-xcontext bump allocator for varying SimdReg
+//	class SimdArena -- per-xcontext bump allocator for varying SimdReg
 //	data buffers.
 //
 //	One arena per SimdXContext (i.e. per thread on the tile-parallel
 //	path).  Per-instruction varying SimdReg buffers (16 KB for a float
-//	lane × 4096-lane varying register) are allocated from the arena
+//	lane x 4096-lane varying register) are allocated from the arena
 //	instead of from libc malloc, and the arena is reset at the end of
 //	each callFunction() run.
 //
 //	Motivation: profiling showed ~8% of wall-clock in libc allocator
 //	plumbing and ~1.3% in the zero-fill branch of `new char[...]()` on
-//	aces_combined × 4 Mpx.  Arena allocation eliminates both costs for
+//	aces_combined x 4 Mpx.  Arena allocation eliminates both costs for
 //	the hot per-instruction varying-reg path.
 //
 //	The arena is a growable chunked bump allocator: one chunk holds
 //	INITIAL_CHUNK_BYTES (2 MiB) of scratch space, which is enough for
 //	peak stack depth on aces_combined (~1 MiB observed).  If a single
 //	callFunction exhausts the chunk, a second chunk is appended (never
-//	reallocated — existing pointers stay valid); reset() simply rewinds
+//	reallocated -- existing pointers stay valid); reset() simply rewinds
 //	the tip to the start of chunk 0 and releases any extra chunks on
 //	the next callFunction.
 //
@@ -55,7 +55,7 @@ class SimdArena
     // Allocate `bytes` of memory, aligned to kAlignment (16 B).
     // The returned pointer is stable until the next reset(), even if
     // the arena grows to accommodate a later allocation.
-    // Does NOT zero-initialize — callers rely on overwriting the
+    // Does NOT zero-initialize -- callers rely on overwriting the
     // whole buffer themselves, which is the common path.
     char *	allocate (std::size_t bytes);
 
@@ -66,7 +66,7 @@ class SimdArena
 
   private:
 
-    // Non-copyable — an arena is owned by exactly one SimdXContext.
+    // Non-copyable -- an arena is owned by exactly one SimdXContext.
     SimdArena (const SimdArena &);
     SimdArena &operator= (const SimdArena &);
 

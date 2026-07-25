@@ -20,7 +20,7 @@ using namespace std;
 
 // Pins the codegen substitutions in CtlSimdSyntaxTree.cpp:
 // SimdCallNode::generateCode swaps idiomatic Lib.Academy.Utilities
-// helpers for SimdCCallInst → simdFunc1Arg/2Arg<Inline...Float>.  The
+// helpers for SimdCCallInst -> simdFunc1Arg/2Arg<Inline...Float>.  The
 // fixture (testInlineHelpers.ctl) defines those helpers verbatim from
 // aces-core; this test runs each substitution against IEEE-754 specials
 // and confirms bit-equality (with NaN-payload tolerance) against a
@@ -47,7 +47,7 @@ bitwise_equal (float a, float b)
 
 // IEEE-754: NaN bit-patterns are not architecturally canonicalised in a
 // way we can rely on across libm and SIMD paths.  Treat any two NaNs as
-// equal — the exact payload is not part of the contract being tested.
+// equal -- the exact payload is not part of the contract being tested.
 bool
 nan_or_eq (float a, float b)
 {
@@ -73,7 +73,7 @@ const float kSpecials[] = {
 const int kNSpecials = sizeof (kSpecials) / sizeof (kSpecials[0]);
 
 
-// Reference impls — must mirror the Inline*Float bodies in
+// Reference impls -- must mirror the Inline*Float bodies in
 // CtlSimdSyntaxTree.cpp exactly.  Updates here and there move together.
 
 float ref_min (float a, float b) { return a < b ? a : b; }
@@ -248,14 +248,14 @@ testRadDeg (SimdInterpreter &interp)
 void
 testCopysign (SimdInterpreter &interp)
 {
-    // KEY edge: y = ±0 must produce 0, NOT ±|x| (CTL `sign(0) = 0`).
+    // KEY edge: y = +/-0 must produce 0, NOT +/-|x| (CTL `sign(0) = 0`).
     // This is the documented divergence from C99 std::copysign.
     const float aIn[] = {
         1.0f, -1.0f,  2.5f, -2.5f, 0.0f, -0.0f,
         std::numeric_limits<float>::infinity(),
         -std::numeric_limits<float>::infinity(),
         std::numeric_limits<float>::quiet_NaN(),
-        1.0f, 1.0f, 1.0f, 1.0f,    // pair with y in {±0, NaN, Inf}
+        1.0f, 1.0f, 1.0f, 1.0f,    // pair with y in {+/-0, NaN, Inf}
     };
     const float bIn[] = {
         1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f,

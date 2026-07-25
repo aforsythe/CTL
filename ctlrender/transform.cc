@@ -594,7 +594,7 @@ void run_ctl_transform(const ctl_operation_t &ctl_operation,
 				o += p;
 			}
 
-			// Cap workers to tile count — more threads than tiles wastes
+			// Cap workers to tile count -- more threads than tiles wastes
 			// spawn cost for threads that do no work.
 			if (worker_count > tiles.size()) worker_count = tiles.size();
 
@@ -1164,7 +1164,7 @@ transform_pixels(const CTLOperations &ctl_operations,
     }
 
     // mkimage only reads image_format->descriptor when descriptor is 0.
-    // For -pixel mode we don't care about the descriptor — a zero-
+    // For -pixel mode we don't care about the descriptor -- a zero-
     // initialized format_t is safe.
     format_t dummy_format;
     memset(&dummy_format, 0, sizeof(dummy_format));

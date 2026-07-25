@@ -32,7 +32,7 @@ OUTPUT_NAMES = ["rOut", "gOut", "bOut"]
 def gen_expression(rng: random.Random, depth: int, vars_in_scope: list[str]) -> str:
     """Build a small arithmetic expression tree.
 
-    Picked to be safe under any input — no division (avoids /0), no log/sqrt
+    Picked to be safe under any input -- no division (avoids /0), no log/sqrt
     (avoids domain errors on negative inputs), only +/-/*/abs/min/max."""
     if depth == 0 or rng.random() < 0.3:
         # Leaf: a variable in scope or a small literal.
@@ -73,7 +73,7 @@ def gen_program(rng: random.Random, name: str) -> str:
     return textwrap.dedent(f"""\
         // Auto-generated property test fixture (seed-derived).
         // Vector vs scalar interpreter paths must produce byte-identical
-        // output for any valid input — divergence indicates a SIMD bug.
+        // output for any valid input -- divergence indicates a SIMD bug.
         void main(
         {sig})
         {{

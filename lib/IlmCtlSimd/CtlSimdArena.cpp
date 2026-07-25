@@ -3,7 +3,7 @@
 // ("A.M.P.A.S."). Portions contributed by others as indicated.
 // All rights reserved.
 //
-// (License text omitted for brevity — see CtlSimdReg.h for the full
+// (License text omitted for brevity -- see CtlSimdReg.h for the full
 // ASWF BSD-style license that governs this file.)
 ///////////////////////////////////////////////////////////////////////////
 

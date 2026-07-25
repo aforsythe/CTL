@@ -102,7 +102,7 @@ DEFINE_SIMD_FUNC_1_ARG (InlineDegToRadFloat,
                         float, float);
 
 // Match CTL `sign(y)*fabs(x)` exactly; sign(0) is 0, so copysign(x,0)=0.
-// (std::copysign would return +x for y=0 — different semantics.)
+// (std::copysign would return +x for y=0 -- different semantics.)
 DEFINE_SIMD_FUNC_2_ARG (InlineCopysignFloat,
                         ((a2 < 0.0f ? -1.0f : (a2 > 0.0f ? 1.0f : 0.0f))
                          * std::fabs (a1)),
@@ -1144,7 +1144,7 @@ SimdCallNode::returnsType(const TypePtr &t) const
 // declared above.  Match criteria: name is exactly the helper token
 // (bare) OR ends with `::<token>` (any qualifier), AND the parameter
 // types and return type match the float shape exactly.  The match is
-// purely syntactic — by name and signature — see the file-level comment
+// purely syntactic -- by name and signature -- see the file-level comment
 // for what this does and does not verify.
 //
 // Returns: integer kind (consumed by the switch in generateCode), or

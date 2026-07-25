@@ -1,4 +1,4 @@
-// Fixture for testConcurrentCalls — a small varying transform whose
+// Fixture for testConcurrentCalls -- a small varying transform whose
 // per-lane result is a deterministic function of the input value, the
 // uniform parameter `k`, and the lane index would NOT participate (so
 // each thread's seed produces a known answer regardless of execution

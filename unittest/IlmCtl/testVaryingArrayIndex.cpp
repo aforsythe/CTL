@@ -21,7 +21,7 @@ using namespace std;
 
 namespace {
 
-// Reference table — must match the `squares` const inside the .ctl.
+// Reference table -- must match the `squares` const inside the .ctl.
 const float kSquares[8] = {0.0f, 1.0f, 4.0f, 9.0f, 16.0f, 25.0f, 36.0f, 49.0f};
 
 

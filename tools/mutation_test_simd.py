@@ -42,7 +42,7 @@ MUTATIONS: list[Mutation] = [
     # ---------------------------------------------------------------
 
     # SimdBoolMask::setVarying widening: memset broadcasts inline value across
-    # all lanes.  Mutate the broadcast value to a constant 0 — testSimdRegAddr
+    # all lanes.  Mutate the broadcast value to a constant 0 -- testSimdRegAddr
     # checks lane[i] == seed after widen.
     Mutation(
         file="lib/IlmCtlSimd/CtlSimdReg.h",
@@ -52,7 +52,7 @@ MUTATIONS: list[Mutation] = [
         target="IlmCtlTest",
     ),
     # SimdBoolMask::setVarying narrow: should preserve _data[0] in
-    # _inlineData.  Mutate to preserve _data[1] — testSimdRegAddr's
+    # _inlineData.  Mutate to preserve _data[1] -- testSimdRegAddr's
     # strengthened lane-discrimination check pins this.
     Mutation(
         file="lib/IlmCtlSimd/CtlSimdReg.h",
@@ -63,7 +63,7 @@ MUTATIONS: list[Mutation] = [
     ),
     # SimdReg::reference: assignment delete[]s old data before reassignment.
     # Skipping the delete leaks memory but doesn't break observable values.
-    # Documents an inherent limit of unit-test mutation testing — only an
+    # Documents an inherent limit of unit-test mutation testing -- only an
     # ASan build catches this class.
     Mutation(
         file="lib/IlmCtlSimd/CtlSimdReg.cpp",
@@ -94,7 +94,7 @@ MUTATIONS: list[Mutation] = [
 
     # SimdBranchInst::execute fuses trueMask/falseMask construction with
     # `t = mi & ci` (active lane AND condition true).  Replacing with
-    # plain `ci` ignores the active-lane mask — branches that should be
+    # plain `ci` ignores the active-lane mask -- branches that should be
     # masked-off lane-by-lane silently take the true path.  Catches an
     # entire category of "mask not respected" regressions.
     Mutation(
@@ -128,7 +128,7 @@ MUTATIONS: list[Mutation] = [
     # SimdLoopInst conditional-mask narrowing: original ANDs the loop
     # mask with the condition (lanes that became false drop out).
     # Mutating to plain `=` re-enables previously-masked lanes whenever
-    # the condition is true — runaway iterations on lanes that should
+    # the condition is true -- runaway iterations on lanes that should
     # have stopped.  Property-based test should catch this.
     Mutation(
         file="lib/IlmCtlSimd/CtlSimdInst.cpp",
@@ -144,7 +144,7 @@ MUTATIONS: list[Mutation] = [
 
     # transform.cc tile fetch_add: `next_tile.fetch_add(1, ...)` claims
     # one tile per worker.  Replacing with `.load(...)` makes every
-    # worker see the same idx — multiple workers process the same tile
+    # worker see the same idx -- multiple workers process the same tile
     # while later tiles are skipped.  Caught by the threaded-parity
     # cmp tests (output diverges from -threads 1 reference).
     Mutation(
@@ -160,19 +160,19 @@ MUTATIONS: list[Mutation] = [
     # (single-thread autoselect) means -threads 0 silently runs serial.
     # Caught by ctlrender-threads-autoselect-cmp (byte parity vs
     # -threads 1 reference; would actually still match because both are
-    # serial — DOCUMENTED as expected survivor for this reason).
+    # serial -- DOCUMENTED as expected survivor for this reason).
     Mutation(
         file="ctlrender/transform.cc",
         pattern=r"if \(hw > 1\) worker_count = hw;",
         replacement="worker_count = 1;",
-        description="transform.cc: -threads 0 autoselect always serial (expected SURVIVOR — byte-parity equivalent)",
+        description="transform.cc: -threads 0 autoselect always serial (expected SURVIVOR -- byte-parity equivalent)",
         target="ctlrender",
     ),
 
     # exr_file.cc parallel float->half: each worker grabs `kChunk`
     # elements via fetch_add.  Mutating to grab `kChunk - 1` means each
     # chunk loses its last element to the half(0.0f) default-construction
-    # of the std::vector<half> output buffer's tail.  Wait — output
+    # of the std::vector<half> output buffer's tail.  Wait -- output
     # is half_pixels.ptr() (raw memory), not zero-initialised, so the
     # last element of each chunk gets uninitialised garbage.  Caught
     # by ctlrender-parallel-half-cmp-* (byte parity).
@@ -231,7 +231,7 @@ def run_build(build_dir: pathlib.Path, target: str) -> tuple[bool, str]:
 
 def run_tests(build_dir: pathlib.Path, test_filter: str,
               timeout_s: int = 60) -> tuple[bool, str]:
-    """Run the test suite with a hard timeout — a mutation that creates an
+    """Run the test suite with a hard timeout -- a mutation that creates an
     infinite loop must not hang the harness.  Treat timeout as 'caught'
     (the mutation produced observable wrong behaviour: a hang)."""
     cmd = ["ctest", "--timeout", str(timeout_s)]
@@ -242,7 +242,7 @@ def run_tests(build_dir: pathlib.Path, test_filter: str,
             cmd, cwd=str(build_dir), capture_output=True, text=True,
             timeout=timeout_s * 4)
     except subprocess.TimeoutExpired:
-        return (False, "harness timeout — mutation likely caused a hang")
+        return (False, "harness timeout -- mutation likely caused a hang")
     return (proc.returncode == 0, proc.stdout[-2000:])
 
 
@@ -285,7 +285,7 @@ def main() -> int:
 
             ok_tests, test_log = run_tests(build_dir, args.test_filter)
             if ok_tests:
-                print("  SURVIVED — no test caught the mutation", flush=True)
+                print("  SURVIVED -- no test caught the mutation", flush=True)
                 survivors.append(m)
             else:
                 print("  caught", flush=True)
@@ -299,7 +299,7 @@ def main() -> int:
     print(f"survived:     {len(survivors)}/{len(MUTATIONS)}")
     print(f"uncompilable: {len(uncompilable)}/{len(MUTATIONS)}")
     if survivors:
-        print("\nSurvivors (no test caught these — gaps in coverage):")
+        print("\nSurvivors (no test caught these -- gaps in coverage):")
         for m in survivors:
             print(f"  - {m.description}  [{m.file}]")
 

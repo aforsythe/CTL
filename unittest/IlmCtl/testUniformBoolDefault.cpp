@@ -46,7 +46,7 @@ sharedInterp ()
 //   - When setDefaultValue() is called, the function sees flag=true and
 //     returns 1.0.
 //   - When the host explicitly writes false, the function sees the
-//     override (returns 0.0) — the default does not silently stomp it.
+//     override (returns 0.0) -- the default does not silently stomp it.
 //
 void
 testDefaultTrue ()
@@ -55,7 +55,7 @@ testDefaultTrue ()
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_default_true");
-        fc->inputArg(0)->setDefaultValue();   // flag → true
+        fc->inputArg(0)->setDefaultValue();   // flag -> true
         fc->callFunction (1);
 
         float r = -42.0f;
@@ -88,7 +88,7 @@ testDefaultFalse ()
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_default_false");
-        fc->inputArg(0)->setDefaultValue();   // flag → false
+        fc->inputArg(0)->setDefaultValue();   // flag -> false
         fc->callFunction (1);
 
         float r = -42.0f;
@@ -112,18 +112,18 @@ testDefaultFalse ()
 
 //
 // Test: two adjacent uniform bools.  Verifies that defaults and
-// overrides for each are independent — no cross-contamination via
+// overrides for each are independent -- no cross-contamination via
 // alignment or stride.
 //
 void
 testTwoBools ()
 {
-    std::cout << "  two bools, both defaults (T+F → 1.0)\n";
+    std::cout << "  two bools, both defaults (T+F -> 1.0)\n";
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_two_bools");
-        fc->inputArg(0)->setDefaultValue();  // flagA → true
-        fc->inputArg(1)->setDefaultValue();  // flagB → false
+        fc->inputArg(0)->setDefaultValue();  // flagA -> true
+        fc->inputArg(1)->setDefaultValue();  // flagB -> false
 
         fc->callFunction (1);
         float r = -42.0f;
@@ -131,7 +131,7 @@ testTwoBools ()
         assert (r == 1.0f);
     }
 
-    std::cout << "  two bools, override flagB to true (T+T → 3.0)\n";
+    std::cout << "  two bools, override flagB to true (T+T -> 3.0)\n";
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_two_bools");
@@ -145,7 +145,7 @@ testTwoBools ()
         assert (r == 3.0f);
     }
 
-    std::cout << "  two bools, override flagA to false (F+F → 0.0)\n";
+    std::cout << "  two bools, override flagA to false (F+F -> 0.0)\n";
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_two_bools");
@@ -180,9 +180,9 @@ testUniformBroadcastsAcrossLanes ()
             "ub_test::ub_with_varying");
 
         // Promote per-pixel inputs to varying.  The uniform bool stays
-        // uniform — that's the path under test.
+        // uniform -- that's the path under test.
         fc->inputArg(0)->setVarying (true);                  // value
-        fc->inputArg(1)->setDefaultValue();                  // flag → true
+        fc->inputArg(1)->setDefaultValue();                  // flag -> true
         fc->outputArg(0)->setVarying (true);                 // r
 
         std::vector<float> values (N);
@@ -204,7 +204,7 @@ testUniformBroadcastsAcrossLanes ()
     }
 
     {
-        // Same fixture, host overrides flag → false.  Every lane should
+        // Same fixture, host overrides flag -> false.  Every lane should
         // return 0.0.
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_with_varying");

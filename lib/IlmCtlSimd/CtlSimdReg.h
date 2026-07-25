@@ -158,21 +158,21 @@ class SimdReg
     // Value constructor
     explicit SimdReg (bool varying, size_t elementSize);
 
-    // Arena-backed value constructor — for hot-path per-instruction regs.
+    // Arena-backed value constructor -- for hot-path per-instruction regs.
     // _data is allocated from the supplied SimdArena and zero-filled
     // (matches the scalar-path ctor).  The arena outlives every reg
     // allocated from it (SimdArena::reset must not run while any
     // arena-backed reg is still reachable).
     explicit SimdReg (bool varying, size_t elementSize, SimdArena &arena);
 
-    // Uninitialized variant — the caller must full-write the buffer
+    // Uninitialized variant -- the caller must full-write the buffer
     // before any read; any partial-write branch must zero unmasked
     // lanes itself.  Used by createInArena(..., zeroInit=false).
     SimdReg (bool varying, size_t elementSize, SimdArena &arena,
 	     bool zeroInit);
 
     // Allocate both the SimdReg object itself and its data buffer from
-    // `arena` — saves a malloc+free pair per hot-path instruction. The
+    // `arena` -- saves a malloc+free pair per hot-path instruction. The
     // returned object must be destroyed by ~SimdReg() only; operator
     // delete must not run because the object storage is arena-owned.
     // Falls back to heap allocation if the arena is exhausted.

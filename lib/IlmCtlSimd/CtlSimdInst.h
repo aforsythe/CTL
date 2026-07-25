@@ -717,7 +717,7 @@ void
 SimdPushLiteralInst<T>::execute (SimdBoolMask &mask,
 				 SimdXContext &xcontext) const
 {
-    // Uniform single-element reg — memcpy below full-writes the value.
+    // Uniform single-element reg -- memcpy below full-writes the value.
     SimdReg *out = SimdReg::createInArena (xcontext.arena(),
 					   /*varying=*/false,
 					   sizeof(T),

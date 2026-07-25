@@ -4,7 +4,7 @@
 ///////////////////////////////////////////////////////////////////////////
 
 // Scope: only the std::string and std::stringstream constructor
-// variants — the paths the interpreter itself takes (Iex::THROW wraps
+// variants -- the paths the interpreter itself takes (Iex::THROW wraps
 // the stringstream form).  The printf-style variadic ctor +
 // _explain() formatter crashes deterministically inside vsnprintf ->
 // localeconv_l on Apple Silicon: a latent va_list ABI bug never hit
@@ -77,7 +77,7 @@ testSubclassDispatch ()
     {
 	REQUIRE(string(e.what()) == "max inst hit at depth 12");
     }
-    // MaxInstExc as CtlExc base — inheritance preserved.
+    // MaxInstExc as CtlExc base -- inheritance preserved.
     try { throw MaxInstExc(string("for base catch")); }
     catch (const CtlExc &e)
     {
@@ -91,7 +91,7 @@ testSubclassDispatch ()
 	REQUIRE(string(e.what()) == "index 5 of 3");
     }
 
-    // Three sibling stack exceptions — RTTI must distinguish them
+    // Three sibling stack exceptions -- RTTI must distinguish them
     // from each other even though they share the macro body.
     try { throw StackOverflowExc(string("overflow")); }
     catch (const StackOverflowExc &e) { REQUIRE(string(e.what()) == "overflow"); }

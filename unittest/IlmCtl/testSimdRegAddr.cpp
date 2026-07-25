@@ -68,7 +68,7 @@ testSimdRegSetVaryingTransitions ()
 	REQUIRE(v == seed);
     }
 
-    // Mutate lane 0, narrow back to non-varying — value preserved.
+    // Mutate lane 0, narrow back to non-varying -- value preserved.
     float other = -42.0f;
     memcpy(r[0], &other, sizeof(float));
     r.setVarying(false);
@@ -85,7 +85,7 @@ testSimdRegArenaBacked ()
 
     SimdArena arena;
 
-    // zeroInit=true (default) — buffer must be zeroed.
+    // zeroInit=true (default) -- buffer must be zeroed.
     SimdReg r1 (true, sizeof(float), arena);
     for (int i = 0; i < 64; ++i)
     {
@@ -94,7 +94,7 @@ testSimdRegArenaBacked ()
 	REQUIRE(v == 0.0f);
     }
 
-    // zeroInit=false — caller is responsible; just verify writeback works.
+    // zeroInit=false -- caller is responsible; just verify writeback works.
     SimdReg r2 (true, sizeof(float), arena, /*zeroInit=*/false);
     for (int i = 0; i < 64; ++i)
     {
@@ -128,7 +128,7 @@ testSimdRegCreateInArena ()
     memcpy(&back, (*r)[0], sizeof(float));
     REQUIRE(back == 99.0f);
 
-    SimdReg::destroy(r);   // arena-aware teardown — must not call operator delete.
+    SimdReg::destroy(r);   // arena-aware teardown -- must not call operator delete.
 }
 
 
@@ -226,7 +226,7 @@ testSimdBoolMaskCopyAndPoolExhaustion ()
     for (int i = 0; i < 10; ++i)
 	REQUIRE(dst[i] == ((i & 1) != 0));
 
-    // Allocate well past detail::BoolBufferPool::kCacheMax (32) — the
+    // Allocate well past detail::BoolBufferPool::kCacheMax (32) -- the
     // overflow falls through to heap alloc/free.  Just constructing
     // and destructing them in stack order exercises both pool reuse
     // and overflow.
@@ -273,7 +273,7 @@ testSimdArenaAlignmentAndReset ()
     REQUIRE(p2 >= p1 + 16);
     REQUIRE(p3 >= p2 + 16);
 
-    // Reset, then re-allocate — should reuse chunk 0 (returns the same
+    // Reset, then re-allocate -- should reuse chunk 0 (returns the same
     // base pointer for the first allocation).
     arena.reset();
     char *q = arena.allocate(13);
@@ -306,14 +306,14 @@ testSimdDataAddr ()
     SimdDataAddr fpRel(/*fpOffset=*/-32);
     REQUIRE(fpRel.reg() == nullptr);   // relative addrs return null from no-arg reg()
 
-    // Copy ctor — preserves both branches.
+    // Copy ctor -- preserves both branches.
     SimdDataAddr absCopy(abs);
     REQUIRE(absCopy.reg() == &backing);
 
     SimdDataAddr fpCopy(fpRel);
     REQUIRE(fpCopy.reg() == nullptr);
 
-    // operator= — both branches.
+    // operator= -- both branches.
     SimdDataAddr a(&backing);
     a = fpRel;
     REQUIRE(a.reg() == nullptr);

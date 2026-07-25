@@ -1,4 +1,4 @@
-// Fixture for testInlineHelpers — pins the SimdCallNode codegen
+// Fixture for testInlineHelpers -- pins the SimdCallNode codegen
 // substitution against drift in the canonical Lib.Academy.Utilities
 // helper bodies.
 //
@@ -11,7 +11,7 @@
 //
 // If aces-core revises a helper (e.g. wrap_to_360 starts handling
 // negative angles differently), the CTL body in this fixture must be
-// updated to match — and the inline C++ in CtlSimdSyntaxTree.cpp
+// updated to match -- and the inline C++ in CtlSimdSyntaxTree.cpp
 // audited for the same change.  The runtime tests will not catch
 // fixture-vs-aces-core drift; that is a deliberate choice (this
 // project does not depend on aces-core).

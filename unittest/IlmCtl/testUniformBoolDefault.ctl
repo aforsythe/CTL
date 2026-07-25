@@ -8,7 +8,7 @@
 //
 // Background: a long-standing bug report (originating in the LightSpace +
 // ACES 1.x era) claimed that `input uniform bool legalRange = false` in
-// the SMPTE-legal-range ODT path produced random per-pixel results — the
+// the SMPTE-legal-range ODT path produced random per-pixel results -- the
 // interpreter was alleged to read the boolean as random true/false despite
 // the declared default.  The workaround at the time was to remove the
 // `legalRange` parameter from the ACES ODT and use a separate transform
@@ -19,10 +19,10 @@
 // behaviour so any regression is caught immediately by CI.
 //
 // Functions:
-//   ub_default_true   — default=true,  TRUE branch returns 1.0,  FALSE returns 0.0
-//   ub_default_false  — default=false, TRUE branch returns 1.0,  FALSE returns 0.0
-//   ub_two_bools      — two adjacent uniform bools, returns a 2-bit packed code
-//   ub_with_varying   — uniform bool alongside varying float input
+//   ub_default_true   -- default=true,  TRUE branch returns 1.0,  FALSE returns 0.0
+//   ub_default_false  -- default=false, TRUE branch returns 1.0,  FALSE returns 0.0
+//   ub_two_bools      -- two adjacent uniform bools, returns a 2-bit packed code
+//   ub_with_varying   -- uniform bool alongside varying float input
 
 namespace ub_test
 {
@@ -44,10 +44,10 @@ ub_default_false (output float r, input uniform bool flag = false)
 //
 // Two adjacent uniform bools.  Encodes both into a single float so we
 // can verify each independently in one call:
-//   r = 0.0  → flagA=false, flagB=false
-//   r = 1.0  → flagA=true,  flagB=false
-//   r = 2.0  → flagA=false, flagB=true
-//   r = 3.0  → flagA=true,  flagB=true
+//   r = 0.0  -> flagA=false, flagB=false
+//   r = 1.0  -> flagA=true,  flagB=false
+//   r = 2.0  -> flagA=false, flagB=true
+//   r = 3.0  -> flagA=true,  flagB=true
 //
 void
 ub_two_bools (output float r,

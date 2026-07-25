@@ -5,10 +5,10 @@ reason to isolate a subset, check out the top branch
 (`ship/moduleTestFramework-v1`) and test everything from there.**
 
 ```
-ship/moduleTestFramework-v1   ← recommended, all the below + module test framework
-ship/gpu-metal                ← everything in cpu-perf plus the Apple Silicon Metal GPU backend
-ship/cpu-perf                 ← this branch: CPU performance work only
-master                        ← pre-branch baseline
+ship/moduleTestFramework-v1   <- recommended, all the below + module test framework
+ship/gpu-metal                <- everything in cpu-perf plus the Apple Silicon Metal GPU backend
+ship/cpu-perf                 <- this branch: CPU performance work only
+master                        <- pre-branch baseline
 ```
 
 Each branch is a proper superset of the one below, so:
@@ -33,7 +33,7 @@ below.  No Metal GPU backend.
 
 ### Reference math via `-no-batch-math`
 
-`ctlrender -no-batch-math …` makes the SIMD interpreter skip the
+`ctlrender -no-batch-math ...` makes the SIMD interpreter skip the
 Accelerate/SLEEF batched transcendental dispatch and route every
 stdlib math call through the per-element scalar libm path instead.
 Useful as a same-binary reference baseline when diffing against the
@@ -47,7 +47,7 @@ optimized path:
 The flag is parsed but warns-and-ignores on a Metal-backend build,
 since it only affects CPU SIMD dispatch.  This is the runtime
 counterpart of the compile-time `-DCTL_USE_ACCELERATE=OFF
--DCTL_USE_SLEEF=OFF` opt-out — same effect, no rebuild.
+-DCTL_USE_SLEEF=OFF` opt-out -- same effect, no rebuild.
 
 ### Build and test
 
@@ -59,7 +59,7 @@ cmake --build build -j
 (cd build && ctest)                                   # should be green
 ```
 
-### Run from the build tree — do not `make install`
+### Run from the build tree -- do not `make install`
 
 Test against your own workloads using the binary in the build
 directory directly:
@@ -91,7 +91,7 @@ Keep everything inside your checkout.
 ```
 
 For an A/B without a rebuild, pass `-no-batch-math` on the
-command line — same effect as the `-DCTL_USE_*=OFF` build flags
+command line -- same effect as the `-DCTL_USE_*=OFF` build flags
 but selectable per invocation.
 
 ### Reporting results
@@ -99,7 +99,7 @@ but selectable per invocation.
 Please include:
 
 ```bash
-/usr/bin/time -p ./build/ctlrender/ctlrender -ctl … in.exr out.exr
+/usr/bin/time -p ./build/ctlrender/ctlrender -ctl ... in.exr out.exr
 ```
 
 plus your hardware (CPU model), input image size + format, CTL
@@ -113,4 +113,4 @@ transform used, and the measured wall-time.  File an issue at
 - Bit-exact against pre-branch master on the default build (no
   Accelerate / sleef), and bit-exact again at runtime under
   `-no-batch-math`.
-- ≤1 ULP per transcendental on the vectorized path.
+- <=1 ULP per transcendental on the vectorized path.

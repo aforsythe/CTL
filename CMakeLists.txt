@@ -223,8 +223,8 @@ set(CMAKE_CXX_FLAGS_ASAN
 #                    Hiding CTL's copies makes their type_info module-local,
 #                    so a cast against an object constructed inside libIlmImf
 #                    no longer matches and every header attribute is reported
-#                    as unconvertible.  Turn it on only for a build that
-#                    links no external C++ library across which RTTI travels.
+#                    as unconvertible.  Turn it on only when nothing outside
+#                    the build exchanges RTTI with CTL.
 option(CTL_NATIVE_ARCH
   "Emit host-specific ISA (-mcpu=native on Apple, -march=native elsewhere) in Release builds"
   ON)
@@ -244,9 +244,9 @@ option(CTL_HIDDEN_VISIBILITY
 # tools/run_sanitizer_tests.sh wraps the configure+build+ctest cycle.
 #
 # Catches the class of bugs unit tests can't see directly:
-#   ADDRESS   — heap leaks, use-after-free, double-free, OOB
-#   THREAD    — data races (used during testConcurrentCalls dev)
-#   UNDEFINED — signed integer overflow, misaligned access, etc.
+#   ADDRESS   -- heap leaks, use-after-free, double-free, OOB
+#   THREAD    -- data races (used during testConcurrentCalls dev)
+#   UNDEFINED -- signed integer overflow, misaligned access, etc.
 set(CTL_SANITIZER "OFF" CACHE STRING
   "Runtime sanitizer: OFF, ADDRESS, THREAD, UNDEFINED")
 set_property(CACHE CTL_SANITIZER PROPERTY STRINGS "OFF" "ADDRESS" "THREAD" "UNDEFINED")

@@ -44,7 +44,7 @@ case "${san_kind}" in
     ADDRESS)
         # Apple's ASan does not support leak detection (only available
         # in LSan-enabled platforms, which on Apple Silicon means none).
-        # Don't request it — ASan aborts at startup if asked.
+        # Don't request it -- ASan aborts at startup if asked.
         if [[ "$(uname -s)" == "Darwin" ]]; then
             san_opts="halt_on_error=0"
         else

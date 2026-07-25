@@ -102,7 +102,7 @@ throwIndexOutOfRange (int index, int size)
 // (bool/char, short, float/int32, double/int64); callers on float dominate the
 // hot path (SimdReg::setVarying under SimdAssignInst at 20.9% of wall-clock).
 // For other sizes, falls back to memcpy-in-loop.  dst alignment: arena gives
-// 16 B, `new char[]` gives max_align_t (≥ 16 B on every target) so the typed
+// 16 B, `new char[]` gives max_align_t (>= 16 B on every target) so the typed
 // casts are well-defined.
 inline void
 broadcastElement (char *dst, const char *src, size_t eSize, size_t count)
@@ -187,7 +187,7 @@ SimdReg::SimdReg (bool varying, size_t elementSize, SimdArena &arena,
 	// heap-owned storage so the op does not lose correctness.  Use
 	// the zero-init new[] form whenever the caller asked for zero
 	// (matches the scalar ctor); the uninit path skips zeroing
-	// here too — the caller has promised a full-write.
+	// here too -- the caller has promised a full-write.
 	_data = zeroInit ? new char [nbytes]() : new char [nbytes];
 	_dataOwned = true;
 	return;

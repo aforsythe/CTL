@@ -601,7 +601,7 @@ SimdPushStringLiteralInst::execute
     (SimdBoolMask &mask,
      SimdXContext &xcontext) const
 {
-    // Uniform pointer-sized reg — pointer store below full-writes the value.
+    // Uniform pointer-sized reg -- pointer store below full-writes the value.
     SimdReg *out = SimdReg::createInArena (xcontext.arena(),
 					   /*varying=*/false,
 					   sizeof (string *),

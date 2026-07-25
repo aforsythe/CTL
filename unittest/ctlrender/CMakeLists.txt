@@ -189,7 +189,7 @@ set_tests_properties("ctlrender-maxInstCount-exception" PROPERTIES WILL_FAIL TRU
 # Input RGBA = (0.5, 0.5, 0.5, 1.0); pixel_chain_a.ctl adds 0.25 to R;
 # pixel_chain_b.ctl multiplies G by 2 and halves A.  Expected:
 #   single a:    R=0.75 G=0.5  B=0.5 A=1.0
-#   chain a→b:   R=0.75 G=1.0  B=0.5 A=0.5
+#   chain a->b:   R=0.75 G=1.0  B=0.5 A=0.5
 # Tests assert via PASS_REGULAR_EXPRESSION on stdout.
 add_test(NAME "ctlrender-pixel-rgba-single"
     COMMAND ctlrender
@@ -338,7 +338,7 @@ if(OpenEXR_FOUND)
     endforeach()
 endif()
 
-# -threads × -compression interaction: each compression codec sees a
+# -threads x -compression interaction: each compression codec sees a
 # different chunk-size / encoder, and the per-tile pixel batches arrive
 # from worker threads.  Verify byte-identical output across N=1 vs N=4
 # for a representative set of codecs (lossless block, lossless wavelet,
@@ -368,7 +368,7 @@ endif()
 
 # Error-path tests for CLI flag parsing in ctlrender/main.cc.  Each
 # verifies that the parser exits non-zero on a specific malformed
-# invocation — they exercise distinct error branches that were
+# invocation -- they exercise distinct error branches that were
 # previously unreachable from any other test.
 if(OpenEXR_FOUND)
     set(_FX "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr")
@@ -437,7 +437,7 @@ if(OpenEXR_FOUND)
     # input_scale's `pixel *= scale` on the way in).  So pairing
     # in-chain gain=0.5 with -output_scale 0.5 gives (R * 0.5) / 0.5 = R,
     # i.e. byte-identical to a unity-equivalent reference.  Uses the
-    # float-typed fixture so intermediate values stay in float — half
+    # float-typed fixture so intermediate values stay in float -- half
     # quantization between ops would break byte parity even for
     # algebraically equivalent compositions.
     add_test(NAME "ctlrender-scale-float-ref"
@@ -518,7 +518,7 @@ if(OpenEXR_FOUND)
     set_tests_properties("ctlrender-image-multi-ctl-cmp" PROPERTIES DEPENDS "ctlrender-image-multi-ctl-run")
 
     # -threads autoselect (-threads 0) and -threads >> tiles must be
-    # byte-identical to -threads 1 — same code semantically, different
+    # byte-identical to -threads 1 -- same code semantically, different
     # number of workers.  These pin transform.cc's autoselect resolution
     # and the worker-count > tile-count cap path against silent drift.
     add_test(NAME "ctlrender-threads-autoselect-cmp"
@@ -668,7 +668,7 @@ if(OpenEXR_FOUND)
     endif()
 endif()
 
-# ACES round-trip: ACES → EXR via unity.  The existing test produces an
+# ACES round-trip: ACES -> EXR via unity.  The existing test produces an
 # .aces file from an EXR input; this reads that .aces back through the
 # pipeline as a cross-check that aces_file.cc's read path works on its
 # own writer's output.

@@ -1,4 +1,4 @@
-// Fixture for testVaryingArrayIndex — a function that gathers from a
+// Fixture for testVaryingArrayIndex -- a function that gathers from a
 // constant lookup table using a varying integer index.  Forces the
 // SIMD interpreter to use the array-index reference register
 // constructor (SimdReg::SimdReg(SimdReg&, const SimdReg& indices,

@@ -208,11 +208,11 @@ const format_t &find_format(const char *fmt, const char *message = NULL)
 // ctlrender accepts abbreviations of its long options ("-v" for "-verbose",
 // "-form" for "-format"); minlen is the shortest unambiguous abbreviation.
 //
-// The old spelling, strncmp(argv[0], opt, minlen), compared only the first
-// minlen characters of the option, so any argument sharing that prefix matched
-// too: "-nonsense" was accepted as "-noalpha".  Requiring the argument to be a
-// prefix of the option instead keeps "-noa" matching "-noalpha" while
-// "-nonsense" and "-noalphax" fall through to the unrecognized-option branch.
+// The argument has to be a prefix of the option.  Comparing a fixed minlen
+// characters instead -- strncmp(argv[0], opt, minlen) -- also swallows
+// unrelated arguments that happen to start the same way, which is how
+// "-nonsense" ends up applied as "-noalpha" rather than reaching the
+// unrecognized-option branch.
 //-----------------------------------------------------------------------------
 
 static bool opt_matches(const char *arg, const char *opt, size_t minlen)
@@ -226,13 +226,13 @@ static bool opt_matches(const char *arg, const char *opt, size_t minlen)
 int verbosity = 1;
 
 //-----------------------------------------------------------------------------
-// Parallelism model: two orthogonal axes, composed as jobs × threads.
+// Parallelism model: two orthogonal axes, composed as jobs x threads.
 //
 // -threads controls parallelism WITHIN a single transform().  One input
 // image is split into tiles of maxSamples() lanes; worker threads pull
 // tiles from an atomic counter and run the SIMD interpreter on each.
 // Scales well for large images up to the memory-bandwidth ceiling
-// (measured: ~6× on 4K, Phase B in benchmarks/report.md).  Not useful
+// (measured: ~6x on 4K, Phase B in benchmarks/report.md).  Not useful
 // when there is only enough work to fill one tile.
 //
 // -jobs controls parallelism ACROSS input files.  N whole transforms run
@@ -242,25 +242,25 @@ int verbosity = 1;
 // set and the two layers of the stack (decode / compute / encode)
 // overlap naturally across files.
 //
-// They compose multiplicatively: total active workers ≈ jobs × threads.
+// They compose multiplicatively: total active workers ~ jobs x threads.
 // On an N-core machine the right split depends on the batch shape:
 //
-//   1 input file      →  jobs=1, threads=N      (single-file parallelism
+//   1 input file      ->  jobs=1, threads=N      (single-file parallelism
 //                                                can only come from the
 //                                                tile loop)
-//   M files, M ≥ N    →  jobs=N, threads=1      (file parallelism
+//   M files, M >= N    ->  jobs=N, threads=1      (file parallelism
 //                                                dominates; tile
 //                                                threading adds
 //                                                coordination cost for
 //                                                no gain)
-//   few files, M < N  →  jobs=M, threads=N/M    (split cores evenly;
+//   few files, M < N  ->  jobs=M, threads=N/M    (split cores evenly;
 //                                                both layers contribute)
 //
 // Both flags default to autodetect (0) and the auto logic below picks
 // from this table using hardware_concurrency() and the input count.
 // Explicit values are respected; an explicit -threads survives the
-// jobs-resolver's even split.  Measured on a 16-core M4 Max, 100 × 2K
-// ACES v2 → tiff8: the auto defaults match hand-tuned within noise
+// jobs-resolver's even split.  Measured on a 16-core M4 Max, 100 x 2K
+// ACES v2 -> tiff8: the auto defaults match hand-tuned within noise
 // (57.31 s vs 56.30 s for -jobs 16 -threads 1).
 //-----------------------------------------------------------------------------
 
@@ -766,7 +766,7 @@ int main(int argc, const char **argv)
 		// --benchmark mode skips file-output entirely: it just times the
 		// Metal transform on each input. We require >=1 input and ignore
 		// any trailing path. No format validation, no output overwriting
-		// checks — those are irrelevant to benchmarking.
+		// checks -- those are irrelevant to benchmarking.
 		//
 		if (benchmark_iterations > 0)
 		{
@@ -783,7 +783,7 @@ int main(int argc, const char **argv)
 				exit(1);
 			}
 			// If a trailing arg looks like an output path (would have been
-			// popped as outputFile below), drop it — benchmark doesn't
+			// popped as outputFile below), drop it -- benchmark doesn't
 			// need one.
 			if (input_image_files.size() > 1)
 				input_image_files.pop_back();
@@ -1042,7 +1042,7 @@ int main(int argc, const char **argv)
 		// one command queue per interpreter across the batch. Concurrent
 		// transform() calls from multiple file workers race on that
 		// state and SIGSEGV with no output. File-level parallelism
-		// wouldn't help anyway — one GPU is one GPU — so clamp to 1 and
+		// wouldn't help anyway -- one GPU is one GPU -- so clamp to 1 and
 		// rely on the decode/compute/encode pipeline below for batch
 		// throughput. Covers the parity-check-serial case too (races
 		// on parity_exit_code).
@@ -1092,7 +1092,7 @@ int main(int argc, const char **argv)
 		// OpenEXR's PIZ/ZIP/ZIPS/DWA codecs split scanline blocks into
 		// independent compression tasks submitted to Imf's global thread
 		// pool. The default pool size is 0 (single-threaded), so a 4K PIZ
-		// write serializes 270 blocks onto one core — on the cpu-perf
+		// write serializes 270 blocks onto one core -- on the cpu-perf
 		// path that's the dominant stage on compressed outputs (measured
 		// 4K 30 PIZ = 62 s vs 40 s for NONE). Size the pool to
 		// hardware_concurrency() so the encode/decode work can fan out
@@ -1101,7 +1101,7 @@ int main(int argc, const char **argv)
 		// writePixels/readPixels it's blocked on the Imf pool, so its
 		// CPU slot is free for pool threads to use. The net is at most
 		// hardware_concurrency() active threads at any instant, whether
-		// the bottleneck is compute (jobs × threads) or I/O (pool).
+		// the bottleneck is compute (jobs x threads) or I/O (pool).
 		// Previously capped at 16 to match typical laptop topologies; the
 		// cap was removed because it throttled encode on 28-/64-core
 		// workstations where file workers still benefit from a full-
@@ -1215,13 +1215,13 @@ int main(int argc, const char **argv)
 			// Three-stage batch pipeline: overlap CPU decode(N+1) ||
 			// GPU compute(N) || CPU encode(N-1). Serial per-file is
 			// bound by decode+GPU+encode; with a shared interpreter,
-			// GPU compute ≈ 79% and decode+encode ≈ 21% of wall-clock
+			// GPU compute ~ 79% and decode+encode ~ 21% of wall-clock
 			// on 4K aces_combined. Pipelining hides the CPU work
 			// behind the GPU's kernel time (and vice-versa).
 			//
 			// Applies to N=1 too: a prewarm thread loads the CTL
 			// modules into the shared MetalInterpreter (the SIMD-sidecar
-			// parse+codegen is ~400 ms cold on ACES v2 — the dominant
+			// parse+codegen is ~400 ms cold on ACES v2 -- the dominant
 			// slice of single-file latency) concurrent with the
 			// decoder thread reading the input EXR. parity_check
 			// serializes naturally via main's file_jobs=1 override
@@ -1307,7 +1307,7 @@ int main(int argc, const char **argv)
 				(void)idx;
 			};
 
-			// Bounded single-slot queues — holding one item in flight
+			// Bounded single-slot queues -- holding one item in flight
 			// per stage plus the one currently being worked on gives a
 			// total window of 3, enough to saturate the longest stage
 			// while bounding peak memory to 3 decoded 4K buffers
@@ -1443,7 +1443,7 @@ int main(int argc, const char **argv)
 							// can proceed without waiting on MSL compile.
 							//
 							// Lazily create the interpreter for this
-							// file but do NOT call loadFile yet — we
+							// file but do NOT call loadFile yet -- we
 							// need to wrap loadFile with the sidecar
 							// cache preload/flush pair.  cache.get()
 							// would load eagerly; open-code the
@@ -1482,7 +1482,7 @@ int main(int argc, const char **argv)
 			// so the first decQ pop usually returns immediately.
 			prewarmThr.join();
 
-			// Main thread: compute stage — pop from decQ, run GPU,
+			// Main thread: compute stage -- pop from decQ, run GPU,
 			// push to encQ. Must run on main thread so it holds the
 			// shared MetalInterpreter (newFunctionCall is not
 			// concurrency-safe against itself on the same interp).
