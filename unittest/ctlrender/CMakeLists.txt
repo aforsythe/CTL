@@ -39,7 +39,12 @@ if(OpenEXR_FOUND)
             $<$<TARGET_EXISTS:Imath::Half>:Imath::Half>
             $<$<TARGET_EXISTS:OpenEXR::IlmImf>:OpenEXR::IlmImf>
             $<$<TARGET_EXISTS:IlmBase::Imath>:IlmBase::Imath>
-            $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>)
+            $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>
+            # OpenEXR 2.x splits Iex/IlmThread out of IlmImf and its static
+            # archives do not carry the dependency, so iex_debugTrap and the
+            # thread pool have to be named here explicitly.
+            $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
+            $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>)
 
     # Reference generator for the parallel float->half tests.  Runs an
     # unambiguously-serial conversion in a separate process, so the
@@ -52,7 +57,12 @@ if(OpenEXR_FOUND)
             $<$<TARGET_EXISTS:Imath::Half>:Imath::Half>
             $<$<TARGET_EXISTS:OpenEXR::IlmImf>:OpenEXR::IlmImf>
             $<$<TARGET_EXISTS:IlmBase::Imath>:IlmBase::Imath>
-            $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>)
+            $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>
+            # OpenEXR 2.x splits Iex/IlmThread out of IlmImf and its static
+            # archives do not carry the dependency, so iex_debugTrap and the
+            # thread pool have to be named here explicitly.
+            $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
+            $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>)
 endif()
 
 foreach(J tiff8 tiff16 tiff32 dpx8 dpx10 dpx12 dpx16)

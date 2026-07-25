@@ -6,6 +6,10 @@
 #include <testMathVectorParity.h>
 
 #include <cmath>
+// The scalar references below are the C99 single-precision entry points.
+// <cmath> is only required to declare those in namespace std, and libstdc++
+// does not; <math.h> is what guarantees them at global scope.
+#include <math.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -331,26 +335,26 @@ testMathVectorParity ()
     //
     const size_t N = 1u << 18;
 
-    check1 ("exp",   -30.0f,    30.0f,     vec_exp,   std::expf,   rng, N);
-    check1 ("log",    1e-30f,   1e30f,     vec_log,   std::logf,   rng, N);
-    check1 ("log10",  1e-30f,   1e30f,     vec_log10, std::log10f, rng, N);
-    check1 ("sin",  -100.0f,   100.0f,     vec_sin,   std::sinf,   rng, N);
-    check1 ("cos",  -100.0f,   100.0f,     vec_cos,   std::cosf,   rng, N);
-    check1 ("tan",   -1.5f,     1.5f,      vec_tan,   std::tanf,   rng, N);
-    check1 ("asin",  -1.0f,     1.0f,      vec_asin,  std::asinf,  rng, N);
-    check1 ("acos",  -1.0f,     1.0f,      vec_acos,  std::acosf,  rng, N);
-    check1 ("atan", -1e6f,      1e6f,      vec_atan,  std::atanf,  rng, N);
-    check1 ("sinh", -30.0f,    30.0f,      vec_sinh,  std::sinhf,  rng, N);
-    check1 ("cosh", -30.0f,    30.0f,      vec_cosh,  std::coshf,  rng, N);
-    check1 ("tanh", -30.0f,    30.0f,      vec_tanh,  std::tanhf,  rng, N);
-    check1 ("sqrt",  0.0f,     1e30f,      vec_sqrt,  std::sqrtf,  rng, N);
+    check1 ("exp",   -30.0f,    30.0f,     vec_exp,   ::expf,   rng, N);
+    check1 ("log",    1e-30f,   1e30f,     vec_log,   ::logf,   rng, N);
+    check1 ("log10",  1e-30f,   1e30f,     vec_log10, ::log10f, rng, N);
+    check1 ("sin",  -100.0f,   100.0f,     vec_sin,   ::sinf,   rng, N);
+    check1 ("cos",  -100.0f,   100.0f,     vec_cos,   ::cosf,   rng, N);
+    check1 ("tan",   -1.5f,     1.5f,      vec_tan,   ::tanf,   rng, N);
+    check1 ("asin",  -1.0f,     1.0f,      vec_asin,  ::asinf,  rng, N);
+    check1 ("acos",  -1.0f,     1.0f,      vec_acos,  ::acosf,  rng, N);
+    check1 ("atan", -1e6f,      1e6f,      vec_atan,  ::atanf,  rng, N);
+    check1 ("sinh", -30.0f,    30.0f,      vec_sinh,  ::sinhf,  rng, N);
+    check1 ("cosh", -30.0f,    30.0f,      vec_cosh,  ::coshf,  rng, N);
+    check1 ("tanh", -30.0f,    30.0f,      vec_tanh,  ::tanhf,  rng, N);
+    check1 ("sqrt",  0.0f,     1e30f,      vec_sqrt,  ::sqrtf,  rng, N);
 
     // pow(x, y): x in (0, 1e4], y in [-10, 10] keeps the product inside
     // FP32 range across the whole swept grid.
     check2 ("pow",   1e-4f, 1e4f, -10.0f, 10.0f,
-            vec_pow, std::powf, rng, N);
+            vec_pow, ::powf, rng, N);
     check2 ("atan2", -1e3f, 1e3f, -1e3f, 1e3f,
-            vec_atan2, std::atan2f, rng, N);
+            vec_atan2, ::atan2f, rng, N);
 
     std::fprintf (stderr, "testMathVectorParity: all functions pass.\n");
 #endif
