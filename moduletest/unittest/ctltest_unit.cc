@@ -57,6 +57,9 @@
       inline int ctlDup (int fd)          { return _dup (fd); }
       inline int ctlDup2 (int a, int b)   { return _dup2 (a, b); }
       inline int ctlClose (int fd)        { return _close (fd); }
+      // _putenv_s with an empty value removes the variable.
+      inline void ctlSetEnv (const char* n, const char* v) { _putenv_s (n, v); }
+      inline void ctlUnsetEnv (const char* n)              { _putenv_s (n, ""); }
   }
 #else
   #include <unistd.h>
@@ -64,6 +67,8 @@
       inline int ctlDup (int fd)          { return dup (fd); }
       inline int ctlDup2 (int a, int b)   { return dup2 (a, b); }
       inline int ctlClose (int fd)        { return close (fd); }
+      inline void ctlSetEnv (const char* n, const char* v) { ::setenv (n, v, 1); }
+      inline void ctlUnsetEnv (const char* n)              { ::unsetenv (n); }
   }
 #endif
 #include <vector>
@@ -234,12 +239,12 @@ public:
     EnvGuard(const char* name, const char* value) : _name(name), _had(false) {
         const char* prev = std::getenv(name);
         if (prev) { _had = true; _prev = prev; }
-        if (value) ::setenv(name, value, 1);
-        else       ::unsetenv(name);
+        if (value) ctlSetEnv(name, value);
+        else       ctlUnsetEnv(name);
     }
     ~EnvGuard() {
-        if (_had) ::setenv(_name.c_str(), _prev.c_str(), 1);
-        else      ::unsetenv(_name.c_str());
+        if (_had) ctlSetEnv(_name.c_str(), _prev.c_str());
+        else      ctlUnsetEnv(_name.c_str());
     }
     EnvGuard(const EnvGuard&) = delete;
     EnvGuard& operator=(const EnvGuard&) = delete;

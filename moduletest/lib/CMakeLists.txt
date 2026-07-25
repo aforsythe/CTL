@@ -50,6 +50,16 @@ target_link_libraries(ctltest_core
     $<$<TARGET_EXISTS:IlmBase::Imath>:IlmBase::Imath>
     $<$<TARGET_EXISTS:IlmBase::Half>:IlmBase::Half>
     $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>
+    # OpenEXR 2.x keeps the thread pool in a separate archive that IlmImf does
+    # not pull in, so Semaphore lands undefined without naming it here.
+    $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
+    $<$<TARGET_EXISTS:OpenEXR::IlmThread>:OpenEXR::IlmThread>
   PRIVATE
     ${CTLTEST_YAML_CPP_TARGET}
 )
+
+# GCC before 9 keeps std::filesystem in a separate library and does not link it
+# implicitly; libstdc++ from 9 onward folds it into the main library.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+  target_link_libraries(ctltest_core PUBLIC stdc++fs)
+endif()
