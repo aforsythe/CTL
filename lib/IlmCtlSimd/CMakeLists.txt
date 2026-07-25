@@ -97,7 +97,14 @@ if(CTL_USE_SLEEF)
 		CTL_USE_SLEEF=1
 		CTL_SLEEF_ULP=${CTL_SLEEF_ULP})
 	target_link_libraries(IlmCtlSimd PRIVATE ${CTL_SLEEF_TARGET})
+	# Set only when sleef came from FetchContent, whose in-tree targets do not
+	# export the directory holding the generated sleef.h.
+	if(CTL_SLEEF_INCLUDE_DIR)
+		target_include_directories(IlmCtlSimd PRIVATE ${CTL_SLEEF_INCLUDE_DIR})
+	endif()
 endif()
+
+target_link_libraries(IlmCtlSimd PUBLIC Threads::Threads)
 
 set_target_properties(IlmCtlSimd
 	PROPERTIES

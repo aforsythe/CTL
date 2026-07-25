@@ -40,6 +40,11 @@ endif()
 if(CTL_USE_SLEEF)
 	target_compile_definitions(IlmCtlMathTest PRIVATE CTL_USE_SLEEF=1)
 	target_link_libraries(IlmCtlMathTest PRIVATE ${CTL_SLEEF_TARGET})
+	# Set only when sleef came from FetchContent, whose in-tree targets do not
+	# export the directory holding the generated sleef.h.
+	if(CTL_SLEEF_INCLUDE_DIR)
+		target_include_directories(IlmCtlMathTest PRIVATE ${CTL_SLEEF_INCLUDE_DIR})
+	endif()
 endif()
 
 add_test(IlmCtlMath IlmCtlMathTest)

@@ -13,6 +13,38 @@ set(CMAKE_MODULE_PATH
 
 add_definitions( -DPACKAGE="${PROJECT_NAME}" -DVERSION="${PROJECT_VERSION}" )
 
+# The interpreter and ctlrender both run std::thread pools; on glibc < 2.34
+# that needs an explicit pthread link, which Threads::Threads supplies.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
+# add_link_options() arrived in CMake 3.13 and CTL still configures on distros
+# shipping older releases (ubuntu-18.04 carries 3.10).  Those are all
+# single-config generators, so appending to CMAKE_*_LINKER_FLAGS is equivalent
+# to what add_link_options would emit.
+macro(ctl_add_link_options)
+  if(COMMAND add_link_options)
+    add_link_options(${ARGN})
+  else()
+    foreach(_ctl_lflag ${ARGN})
+      string(APPEND CMAKE_EXE_LINKER_FLAGS " ${_ctl_lflag}")
+      string(APPEND CMAKE_SHARED_LINKER_FLAGS " ${_ctl_lflag}")
+      string(APPEND CMAKE_MODULE_LINKER_FLAGS " ${_ctl_lflag}")
+    endforeach()
+  endif()
+endmacro()
+
+# Same, for a flag that should apply to Release only.  The generator
+# expression is meaningless on the pre-3.13 path, so it is applied
+# unconditionally there -- callers are already inside a Release-only block.
+macro(ctl_add_release_link_option _flag)
+  if(COMMAND add_link_options)
+    add_link_options($<$<CONFIG:Release>:${_flag}>)
+  else()
+    ctl_add_link_options(${_flag})
+  endif()
+endmacro()
+
 option(CTL_BUILD_TESTS "Build the unit tests" ON)
 option(CTL_BUILD_TOOLS "Build the utility commands (ctlrender, etc)" ON)
 option(BUILD_SHARED_LIBS "Build all libraries as shared" OFF )
@@ -81,42 +113,56 @@ if(CTL_USE_SLEEF)
   find_package(sleef CONFIG QUIET)
   if(sleef_FOUND)
     message(STATUS "sleef found via find_package (version ${sleef_VERSION})")
-  elseif(CTL_SLEEF_FETCH AND GIT_FOUND)
-    message(STATUS "sleef not found; fetching via FetchContent")
-    include(FetchContent)
-    set(SLEEF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(SLEEF_BUILD_DFT OFF CACHE BOOL "" FORCE)
-    set(SLEEF_BUILD_QUAD OFF CACHE BOOL "" FORCE)
-    set(SLEEF_BUILD_GNUABI_LIBS OFF CACHE BOOL "" FORCE)
-    set(SLEEF_BUILD_SCALAR_LIB ON CACHE BOOL "" FORCE)
-    FetchContent_Declare(
-      sleef
-      GIT_REPOSITORY https://github.com/shibatch/sleef.git
-      GIT_TAG 3.6.1
-    )
-    FetchContent_MakeAvailable(sleef)
   else()
     # CTL_USE_SLEEF defaults ON for every non-Apple host, so a plain
-    # `cmake -B build` must not hard-fail when sleef is absent: minimal build
-    # containers often ship without git, and offline builds cannot clone at
-    # all.  Dropping to scalar libm is the documented opt-out and costs only
-    # speed, so warn and carry on.
+    # `cmake -B build` must not hard-fail when sleef is absent.  Decide whether
+    # the FetchContent fallback can actually work here before reaching for it.
+    set(_ctl_sleef_fetchable TRUE)
     if(NOT CTL_SLEEF_FETCH)
-      message(WARNING
-        "CTL_USE_SLEEF=ON but sleef was not found and CTL_SLEEF_FETCH=OFF; "
-        "falling back to the scalar libm path.  Install sleef "
-        "(apt libsleef-dev / brew sleef / vcpkg sleef) or enable "
-        "CTL_SLEEF_FETCH to use the vectorized transcendentals.")
+      set(_ctl_sleef_fetchable FALSE)
+      set(_ctl_sleef_why "CTL_SLEEF_FETCH=OFF")
+    elseif(NOT Git_FOUND)
+      # Minimal build containers routinely ship without git, and offline
+      # builds have no network to clone from either.
+      set(_ctl_sleef_fetchable FALSE)
+      set(_ctl_sleef_why "git is unavailable to fetch it")
+    elseif(MSVC)
+      # sleef's generated scalar dispatch does not compile under MSVC, so on
+      # that toolchain sleef has to arrive prebuilt (vcpkg) or not at all.
+      set(_ctl_sleef_fetchable FALSE)
+      set(_ctl_sleef_why "building it from source is unsupported under MSVC")
+    endif()
+
+    if(_ctl_sleef_fetchable)
+      message(STATUS "sleef not found; fetching via FetchContent")
+      include(FetchContent)
+      set(SLEEF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+      set(SLEEF_BUILD_DFT OFF CACHE BOOL "" FORCE)
+      set(SLEEF_BUILD_QUAD OFF CACHE BOOL "" FORCE)
+      set(SLEEF_BUILD_GNUABI_LIBS OFF CACHE BOOL "" FORCE)
+      set(SLEEF_BUILD_SCALAR_LIB ON CACHE BOOL "" FORCE)
+      FetchContent_Declare(
+        sleef
+        GIT_REPOSITORY https://github.com/shibatch/sleef.git
+        GIT_TAG 3.6.1
+      )
+      FetchContent_MakeAvailable(sleef)
+      # The in-tree targets set only PRIVATE include directories, so the
+      # generated sleef.h never reaches consumers the way an installed
+      # sleef::sleef would.  Hand the directory to them explicitly.
+      set(CTL_SLEEF_INCLUDE_DIR "${sleef_BINARY_DIR}/include")
     else()
+      # Dropping to scalar libm is the documented opt-out and costs only
+      # speed, so warn and carry on rather than failing the configure.
       message(WARNING
-        "CTL_USE_SLEEF=ON but sleef was not found and git is unavailable to "
-        "fetch it; falling back to the scalar libm path.  Install sleef "
+        "CTL_USE_SLEEF=ON but sleef was not found and ${_ctl_sleef_why}; "
+        "falling back to the scalar libm path.  Install sleef "
         "(apt libsleef-dev / brew sleef / vcpkg sleef) to use the vectorized "
         "transcendentals.")
+      # Shadow the cache entry rather than FORCE-writing it, so a later
+      # configure re-probes and picks sleef up once it is installed.
+      set(CTL_USE_SLEEF OFF)
     endif()
-    # Shadow the cache entry rather than FORCE-writing it, so a later
-    # configure re-probes and picks sleef up once it is installed.
-    set(CTL_USE_SLEEF OFF)
   endif()
 endif()
 
@@ -143,10 +189,11 @@ set(CMAKE_CXX_FLAGS_ASAN
   CACHE STRING "Flags used by the C++ compiler during AddressSanitizer builds."
   FORCE)
 
-# Release-mode codegen options.  Both default ON: developer builds and the
-# on-branch benchmark matrix are measured with these on.  Turn off when
-# cutting a portable release tarball that must run on older silicon than
-# the build host.
+# Release-mode codegen options.  CTL_NATIVE_ARCH and CTL_LTO default ON:
+# developer builds and the on-branch benchmark matrix are measured with these
+# on.  Turn them off when cutting a portable release tarball that must run on
+# older silicon than the build host.  All three are GCC/Clang driver
+# spellings and are skipped under MSVC, which spells them differently.
 #
 #   CTL_NATIVE_ARCH  Emit host-specific ISA extensions (-mcpu=native on
 #                    APPLE, -march=native elsewhere).  On Apple Silicon
@@ -211,7 +258,7 @@ if(NOT CTL_SANITIZER STREQUAL "OFF")
   set(CTL_PGO "OFF" CACHE STRING "" FORCE)
   set(CTL_LTO OFF CACHE BOOL "" FORCE)
   add_compile_options(${_san_flag} -fno-omit-frame-pointer -O1)
-  add_link_options(${_san_flag})
+  ctl_add_link_options(${_san_flag})
 endif()
 
 # Profile-guided optimization (clang -fprofile-generate / -fprofile-use).
@@ -272,8 +319,8 @@ if(CTL_PGO STREQUAL "AUTO")
   endif()
 endif()
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
-   (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES))
+if(NOT MSVC AND (CMAKE_BUILD_TYPE STREQUAL "Release" OR
+   (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)))
   if(CTL_NATIVE_ARCH)
     if(APPLE)
       add_compile_options($<$<CONFIG:Release>:-mcpu=native>)
@@ -289,7 +336,15 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
       set(_ctl_lto_flag "-flto")
     endif()
     add_compile_options($<$<CONFIG:Release>:${_ctl_lto_flag}>)
-    add_link_options($<$<CONFIG:Release>:${_ctl_lto_flag}>)
+    ctl_add_release_link_option(${_ctl_lto_flag})
+    # GCC's LTO plugin re-runs symbol resolution at link time and drops the
+    # implicit libpthread that the driver would otherwise supply, so
+    # std::thread users fail with undefined pthread_create on glibc < 2.34.
+    # Put the flag back explicitly.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_USE_PTHREADS_INIT)
+      add_compile_options($<$<CONFIG:Release>:-pthread>)
+      ctl_add_release_link_option(-pthread)
+    endif()
   endif()
   if(CTL_HIDDEN_VISIBILITY)
     add_compile_options(
@@ -299,7 +354,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
   if(CTL_PGO STREQUAL "GENERATE")
     message(STATUS "CTL_PGO=GENERATE: profraw dir = ${CTL_PGO_PROFILE_DIR}")
     add_compile_options($<$<CONFIG:Release>:-fprofile-generate=${CTL_PGO_PROFILE_DIR}>)
-    add_link_options($<$<CONFIG:Release>:-fprofile-generate=${CTL_PGO_PROFILE_DIR}>)
+    ctl_add_release_link_option(-fprofile-generate=${CTL_PGO_PROFILE_DIR})
   elseif(CTL_PGO STREQUAL "USE")
     if(NOT CTL_PGO_PROFILE OR NOT EXISTS "${CTL_PGO_PROFILE}")
       message(FATAL_ERROR "CTL_PGO=USE requires CTL_PGO_PROFILE to point at an existing .profdata file (got '${CTL_PGO_PROFILE}'). See CMakeLists.txt for the GENERATE -> llvm-profdata merge -> USE workflow.")
