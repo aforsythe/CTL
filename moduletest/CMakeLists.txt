@@ -29,13 +29,14 @@ elseif(CTLTEST_FETCH_YAML_CPP AND Git_FOUND)
   set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
   set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
   set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
-  # yaml-cpp 0.8.0's cmake_minimum_required is below CMake 4's floor; override
-  # the policy version so the nested project configures on new CMake.
-  set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+  # 0.9.0 rather than 0.8.0: the older release uses uint16_t and uint32_t in
+  # emitterutils.cpp without including <cstdint>, which newer GCC no longer
+  # supplies transitively, and it declares cmake_minimum_required(VERSION 3.4),
+  # below the floor CMake 4 accepts.  0.9.0 fixes both.
   FetchContent_Declare(
     yaml-cpp
     GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-    GIT_TAG 0.8.0
+    GIT_TAG yaml-cpp-0.9.0
   )
   FetchContent_MakeAvailable(yaml-cpp)
 else()
