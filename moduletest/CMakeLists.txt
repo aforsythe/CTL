@@ -15,10 +15,14 @@ option(CTLTEST_FETCH_YAML_CPP
   "If yaml-cpp is not found via find_package, fetch and build it via FetchContent"
   ON)
 
+# FetchContent clones with git; probe for it up front so a missing git takes
+# the skip branch below instead of failing inside ExternalProject.
+find_package(Git QUIET)
+
 find_package(yaml-cpp CONFIG QUIET)
 if(yaml-cpp_FOUND OR TARGET yaml-cpp::yaml-cpp OR TARGET yaml-cpp)
   message(STATUS "yaml-cpp found via find_package")
-elseif(CTLTEST_FETCH_YAML_CPP)
+elseif(CTLTEST_FETCH_YAML_CPP AND Git_FOUND)
   message(STATUS "yaml-cpp not found; fetching via FetchContent")
   include(FetchContent)
   set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -35,11 +39,24 @@ elseif(CTLTEST_FETCH_YAML_CPP)
   )
   FetchContent_MakeAvailable(yaml-cpp)
 else()
-  message(FATAL_ERROR
-    "CTL_BUILD_MODULETEST=ON but yaml-cpp not found and "
-    "CTLTEST_FETCH_YAML_CPP=OFF. Install yaml-cpp "
-    "(apt libyaml-cpp-dev / brew yaml-cpp / vcpkg yaml-cpp) "
-    "or enable CTLTEST_FETCH_YAML_CPP.")
+  # ctltest cannot be built without yaml-cpp, and CTL_BUILD_MODULETEST defaults
+  # ON, so an unavailable dependency must not take the whole configure down
+  # with it: minimal build containers routinely ship without git, and offline
+  # builds cannot clone at all.  Skip the framework and let the rest of CTL
+  # build, which is what every packaging job here actually wants.
+  if(NOT CTLTEST_FETCH_YAML_CPP)
+    set(_ctltest_why "CTLTEST_FETCH_YAML_CPP=OFF")
+  else()
+    set(_ctltest_why "git is unavailable to fetch it")
+  endif()
+  message(WARNING
+    "CTL_BUILD_MODULETEST=ON but yaml-cpp was not found and ${_ctltest_why}; "
+    "skipping the module test framework.  Install yaml-cpp "
+    "(apt libyaml-cpp-dev / brew yaml-cpp / vcpkg yaml-cpp) to build it.")
+  # Shadow the cache entry rather than FORCE-writing it, so a later configure
+  # re-probes and picks yaml-cpp up once it is installed.
+  set(CTL_BUILD_MODULETEST OFF PARENT_SCOPE)
+  return()
 endif()
 
 # Pick whichever target name the installed/fetched yaml-cpp provides.
