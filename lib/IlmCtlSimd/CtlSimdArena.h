@@ -75,6 +75,11 @@ class SimdArena
 
     struct Chunk
     {
+	// malloc aligns only for max_align_t, which is 8 bytes on 32-bit
+	// targets such as armv7 and 16 on x86_64 and arm64.  Chunks are
+	// over-allocated so base can be rounded up to kAlignment; raw is the
+	// pointer that has to go back to free().
+	char *		raw;
 	char *		base;
 	std::size_t	capacity;
     };

@@ -22,7 +22,7 @@ SimdArena::SimdArena ()
 SimdArena::~SimdArena ()
 {
     for (std::size_t i = 0; i < _chunks.size(); ++i)
-	std::free (_chunks[i].base);
+	std::free (_chunks[i].raw);
 }
 
 
@@ -41,12 +41,21 @@ SimdArena::addChunk (std::size_t minBytes)
     while (cap < minBytes)
 	cap *= 2;
 
-    void *mem = std::malloc (cap);
+    // Over-allocate so the usable base can be rounded up to kAlignment.
+    // allocate() keeps every offset a multiple of kAlignment, so aligning the
+    // base is what makes each returned pointer aligned.  malloc alone is not
+    // enough: it only promises max_align_t, which is 8 bytes on armv7.
+    void *mem = std::malloc (cap + kAlignment - 1);
     if (!mem)
 	return false;
 
+    const std::uintptr_t addr = reinterpret_cast<std::uintptr_t>(mem);
+    const std::uintptr_t base =
+	(addr + kAlignment - 1) & ~static_cast<std::uintptr_t>(kAlignment - 1);
+
     Chunk c;
-    c.base = static_cast<char *>(mem);
+    c.raw = static_cast<char *>(mem);
+    c.base = reinterpret_cast<char *>(base);
     c.capacity = cap;
     _chunks.push_back (c);
     return true;
