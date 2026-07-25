@@ -5,6 +5,7 @@ set(SOURCES
 	testExamples.cpp
 	testHugeInit.cpp
 	testParser.cpp
+	testBoolStorage.cpp
 	testVarying.cpp
 	testVaryingLookup.cpp
 	testVaryingReturn.cpp
@@ -37,6 +38,7 @@ add_test(IlmCtl IlmCtlTest)
 
 file(COPY
 	common.ctl
+	testBoolStorage.ctl
 	example.ctl
 	testArray.ctl
 	testCast.ctl
