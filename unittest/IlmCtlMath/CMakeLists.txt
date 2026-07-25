@@ -39,7 +39,7 @@ if(CTL_USE_ACCELERATE)
 endif()
 if(CTL_USE_SLEEF)
 	target_compile_definitions(IlmCtlMathTest PRIVATE CTL_USE_SLEEF=1)
-	target_link_libraries(IlmCtlMathTest PRIVATE sleef::sleef)
+	target_link_libraries(IlmCtlMathTest PRIVATE ${CTL_SLEEF_TARGET})
 endif()
 
 add_test(IlmCtlMath IlmCtlMathTest)

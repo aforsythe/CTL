@@ -74,10 +74,14 @@ if(CTL_USE_SLEEF)
     message(FATAL_ERROR "CTL_SLEEF_ULP must be \"10\" or \"35\" (got \"${CTL_SLEEF_ULP}\")")
   endif()
 
+  # FetchContent clones with git; probe for it up front so a missing git
+  # takes the fallback branch below instead of failing inside ExternalProject.
+  find_package(Git QUIET)
+
   find_package(sleef CONFIG QUIET)
   if(sleef_FOUND)
     message(STATUS "sleef found via find_package (version ${sleef_VERSION})")
-  elseif(CTL_SLEEF_FETCH)
+  elseif(CTL_SLEEF_FETCH AND GIT_FOUND)
     message(STATUS "sleef not found; fetching via FetchContent")
     include(FetchContent)
     set(SLEEF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -92,10 +96,39 @@ if(CTL_USE_SLEEF)
     )
     FetchContent_MakeAvailable(sleef)
   else()
-    message(FATAL_ERROR
-      "CTL_USE_SLEEF=ON but sleef not found and CTL_SLEEF_FETCH=OFF. "
-      "Install sleef (apt libsleef-dev / brew sleef / vcpkg sleef) "
-      "or enable CTL_SLEEF_FETCH.")
+    # CTL_USE_SLEEF defaults ON for every non-Apple host, so a plain
+    # `cmake -B build` must not hard-fail when sleef is absent: minimal build
+    # containers often ship without git, and offline builds cannot clone at
+    # all.  Dropping to scalar libm is the documented opt-out and costs only
+    # speed, so warn and carry on.
+    if(NOT CTL_SLEEF_FETCH)
+      message(WARNING
+        "CTL_USE_SLEEF=ON but sleef was not found and CTL_SLEEF_FETCH=OFF; "
+        "falling back to the scalar libm path.  Install sleef "
+        "(apt libsleef-dev / brew sleef / vcpkg sleef) or enable "
+        "CTL_SLEEF_FETCH to use the vectorized transcendentals.")
+    else()
+      message(WARNING
+        "CTL_USE_SLEEF=ON but sleef was not found and git is unavailable to "
+        "fetch it; falling back to the scalar libm path.  Install sleef "
+        "(apt libsleef-dev / brew sleef / vcpkg sleef) to use the vectorized "
+        "transcendentals.")
+    endif()
+    # Shadow the cache entry rather than FORCE-writing it, so a later
+    # configure re-probes and picks sleef up once it is installed.
+    set(CTL_USE_SLEEF OFF)
+  endif()
+endif()
+
+# Resolve the sleef link target name once so every consumer agrees on it.
+# An installed sleef exports the namespaced sleef::sleef; the FetchContent
+# in-tree build defines only the plain sleef target.  Consumers link
+# ${CTL_SLEEF_TARGET} rather than hardcoding either spelling.
+if(CTL_USE_SLEEF)
+  if(TARGET sleef::sleef)
+    set(CTL_SLEEF_TARGET sleef::sleef)
+  else()
+    set(CTL_SLEEF_TARGET sleef)
   endif()
 
   if(APPLE AND CTL_USE_ACCELERATE)

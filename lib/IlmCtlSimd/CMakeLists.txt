@@ -96,11 +96,7 @@ if(CTL_USE_SLEEF)
 	target_compile_definitions(IlmCtlSimd PRIVATE
 		CTL_USE_SLEEF=1
 		CTL_SLEEF_ULP=${CTL_SLEEF_ULP})
-	if(TARGET sleef::sleef)
-		target_link_libraries(IlmCtlSimd PRIVATE sleef::sleef)
-	else()
-		target_link_libraries(IlmCtlSimd PRIVATE sleef)
-	endif()
+	target_link_libraries(IlmCtlSimd PRIVATE ${CTL_SLEEF_TARGET})
 endif()
 
 set_target_properties(IlmCtlSimd
