@@ -48,7 +48,24 @@
 #include <random>
 #include <sstream>
 #include <string>
-#include <unistd.h>
+// dup/dup2/close for the stdout capture below.  POSIX puts them in
+// <unistd.h>; MSVC puts the same three in <io.h> under underscore-prefixed
+// names, so give them one spelling here rather than at each call site.
+#ifdef _WIN32
+  #include <io.h>
+  namespace {
+      inline int ctlDup (int fd)          { return _dup (fd); }
+      inline int ctlDup2 (int a, int b)   { return _dup2 (a, b); }
+      inline int ctlClose (int fd)        { return _close (fd); }
+  }
+#else
+  #include <unistd.h>
+  namespace {
+      inline int ctlDup (int fd)          { return dup (fd); }
+      inline int ctlDup2 (int a, int b)   { return dup2 (a, b); }
+      inline int ctlClose (int fd)        { return close (fd); }
+  }
+#endif
 #include <vector>
 
 using namespace ctltest;
@@ -123,11 +140,11 @@ class StreamCapture {
 public:
     explicit StreamCapture(int fd) : _fd(fd) {
         std::fflush(_fd == 1 ? stdout : stderr);
-        _saved = dup(_fd);
+        _saved = ctlDup(_fd);
         _path  = std::string("/tmp/ctltest_capture_") + std::to_string(getpid())
                + "_" + std::to_string(++_counter) + ".txt";
         _file  = std::fopen(_path.c_str(), "w+");
-        if (_file) dup2(fileno(_file), _fd);
+        if (_file) ctlDup2(fileno(_file), _fd);
     }
 
     ~StreamCapture() {
@@ -144,7 +161,7 @@ public:
 private:
     void finish() {
         std::fflush(_fd == 1 ? stdout : stderr);
-        if (_saved >= 0) { dup2(_saved, _fd); close(_saved); _saved = -1; }
+        if (_saved >= 0) { ctlDup2(_saved, _fd); ctlClose(_saved); _saved = -1; }
         if (_file) {
             std::fseek(_file, 0, SEEK_END);
             const long sz = std::ftell(_file);
