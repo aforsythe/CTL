@@ -314,7 +314,16 @@ set(CTL_PGO_PROFILE "" CACHE FILEPATH
 # below consumes CTL_PGO) means the Release block sees a concrete value.
 if(CTL_PGO STREQUAL "AUTO")
   set(_ctl_pgo_shipped "${CMAKE_SOURCE_DIR}/cmake/pgo/ctl.profdata")
-  if(EXISTS "${_ctl_pgo_shipped}")
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # The shipped profile is llvm-profdata output.  GCC's -fprofile-use takes
+    # a directory of .gcda files instead, so handing it this path makes it
+    # search for per-object .gcda under the profile name, find nothing, and
+    # warn once per translation unit while optimizing as if PGO were off.
+    message(STATUS
+      "CTL_PGO=AUTO: shipped profile is llvm-profdata format and the compiler "
+      "is ${CMAKE_CXX_COMPILER_ID}; disabling PGO.")
+    set(CTL_PGO "OFF")
+  elseif(EXISTS "${_ctl_pgo_shipped}")
     message(STATUS "CTL_PGO=AUTO: using shipped profile ${_ctl_pgo_shipped}")
     set(CTL_PGO "USE")
     if(NOT CTL_PGO_PROFILE OR CTL_PGO_PROFILE STREQUAL "")
