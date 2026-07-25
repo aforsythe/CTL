@@ -70,6 +70,23 @@
 #include <typeinfo>
 #include <string>
 
+//
+// C99's restrict has no standard C++ spelling.  GCC and Clang expose it as
+// __restrict__, MSVC as __restrict; anything else gets a no-op, since the
+// qualifier is strictly an optimization hint.
+//
+
+#ifndef CTL_RESTRICT
+    #if defined(_MSC_VER)
+        #define CTL_RESTRICT __restrict
+    #elif defined(__GNUC__) || defined(__clang__)
+        #define CTL_RESTRICT __restrict__
+    #else
+        #define CTL_RESTRICT
+    #endif
+#endif
+
+
 namespace Ctl {
 
 class SimdInst
@@ -517,11 +534,11 @@ SimdUnaryOpInst<In, Out, Op>::execute (SimdBoolMask &mask,
 		// no zero needed.
 		//
 		// in and out come from distinct arena allocations
-		// and cannot alias; __restrict__ lets clang hoist the
+		// and cannot alias; CTL_RESTRICT lets clang hoist the
 		// aliasing check and vectorize the loop on NEON/SSE.
 
-		const In * __restrict__ inPtr  = (In *)in[0];
-		Out * __restrict__       outPtr = (Out *)(*out)[0];
+		const In * CTL_RESTRICT inPtr  = (In *)in[0];
+		Out * CTL_RESTRICT       outPtr = (Out *)(*out)[0];
 		Out *                    outEnd = outPtr + xcontext.regSize();
 
 		while (outPtr < outEnd)
@@ -609,12 +626,12 @@ SimdBinaryOpInst<In1, In2, Out, Op>::execute (SimdBoolMask &mask,
 		// of the input registers is varying.
 		//
 		// in1, in2 and out come from distinct arena allocations
-		// and cannot alias; __restrict__ lets clang hoist the
+		// and cannot alias; CTL_RESTRICT lets clang hoist the
 		// aliasing check and vectorize the loop on NEON/SSE.
 
-		const In1 * __restrict__ in1Ptr = (In1 *)in1[0];
-		const In2 * __restrict__ in2Ptr = (In2 *)in2[0];
-		Out * __restrict__       outPtr = (Out *)(*out)[0];
+		const In1 * CTL_RESTRICT in1Ptr = (In1 *)in1[0];
+		const In2 * CTL_RESTRICT in2Ptr = (In2 *)in2[0];
+		Out * CTL_RESTRICT       outPtr = (Out *)(*out)[0];
 		Out *                    outEnd = outPtr + xcontext.regSize();
 
 		if (in1.isVarying() && in2.isVarying())

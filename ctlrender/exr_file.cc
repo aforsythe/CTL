@@ -55,6 +55,23 @@
 #include "exr_file.hh"
 #include <fstream>
 
+//
+// C99's restrict has no standard C++ spelling.  GCC and Clang expose it as
+// __restrict__, MSVC as __restrict; anything else gets a no-op, since the
+// qualifier is strictly an optimization hint.
+//
+
+#ifndef CTL_RESTRICT
+    #if defined(_MSC_VER)
+        #define CTL_RESTRICT __restrict
+    #elif defined(__GNUC__) || defined(__clang__)
+        #define CTL_RESTRICT __restrict__
+    #else
+        #define CTL_RESTRICT
+    #endif
+#endif
+
+
 #if defined(HAVE_OPENEXR)
 #include <ImfInputFile.h>
 #include <ImfOutputFile.h>
@@ -172,7 +189,7 @@ bool exr_read(const char *name, float scale, ctl::dpx::fb<float> *pixels,
 		return 1;
 	}
 
-	float * __restrict__ p = pixels->ptr();
+	float * CTL_RESTRICT p = pixels->ptr();
 	const uint64_t n = pixels->count();
 	for (uint64_t i = 0; i < n; i++)
 		p[i] *= scale;
