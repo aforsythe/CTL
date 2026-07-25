@@ -53,6 +53,7 @@
 // names, so give them one spelling here rather than at each call site.
 #ifdef _WIN32
   #include <io.h>
+  #include <process.h>
   namespace {
       inline int ctlDup (int fd)          { return _dup (fd); }
       inline int ctlDup2 (int a, int b)   { return _dup2 (a, b); }
@@ -60,15 +61,26 @@
       // _putenv_s with an empty value removes the variable.
       inline void ctlSetEnv (const char* n, const char* v) { _putenv_s (n, v); }
       inline void ctlUnsetEnv (const char* n)              { _putenv_s (n, ""); }
+      inline FILE* ctlPopen (const char* c, const char* m) { return _popen (c, m); }
+      inline int   ctlPclose (FILE* f)                     { return _pclose (f); }
+      inline int   ctlGetPid ()                            { return _getpid (); }
+      // _pclose already hands back the child's exit code.
+      inline int   ctlExitCode (int rc)                    { return rc; }
   }
 #else
   #include <unistd.h>
+  #include <sys/wait.h>
   namespace {
       inline int ctlDup (int fd)          { return dup (fd); }
       inline int ctlDup2 (int a, int b)   { return dup2 (a, b); }
       inline int ctlClose (int fd)        { return close (fd); }
       inline void ctlSetEnv (const char* n, const char* v) { ::setenv (n, v, 1); }
       inline void ctlUnsetEnv (const char* n)              { ::unsetenv (n); }
+      inline FILE* ctlPopen (const char* c, const char* m) { return ::popen (c, m); }
+      inline int   ctlPclose (FILE* f)                     { return ::pclose (f); }
+      inline int   ctlGetPid ()                            { return ::getpid (); }
+      inline int   ctlExitCode (int rc)
+      { return WIFEXITED (rc) ? WEXITSTATUS (rc) : -1; }
   }
 #endif
 #include <vector>
@@ -146,7 +158,8 @@ public:
     explicit StreamCapture(int fd) : _fd(fd) {
         std::fflush(_fd == 1 ? stdout : stderr);
         _saved = ctlDup(_fd);
-        _path  = std::string("/tmp/ctltest_capture_") + std::to_string(getpid())
+        _path  = (std::filesystem::temp_directory_path() / "ctltest_capture").string()
+               + "_" + std::to_string(ctlGetPid())
                + "_" + std::to_string(++_counter) + ".txt";
         _file  = std::fopen(_path.c_str(), "w+");
         if (_file) ctlDup2(fileno(_file), _fd);
@@ -206,7 +219,8 @@ public:
         std::uniform_int_distribution<int> d(0, 0x7fffffff);
         for (int i = 0; i < 32; ++i) {
             std::ostringstream os;
-            os << "/tmp/ctltest_unit-" << getpid() << "-" << d(rng);
+            os << (fs::temp_directory_path() / "ctltest_unit-").string()
+                   << ctlGetPid() << "-" << d(rng);
             std::error_code ec;
             if (fs::create_directory(os.str(), ec)) {
                 _path = os.str();
@@ -214,7 +228,7 @@ public:
             }
         }
         // Fallback: just use a known path; tests will fail visibly.
-        _path = "/tmp/ctltest_unit-fallback";
+        _path = (std::filesystem::temp_directory_path() / "ctltest_unit-fallback").string();
         std::filesystem::create_directory(_path);
     }
     ~TempDir() {
@@ -475,7 +489,8 @@ void testValidateTolerancePaths()
 
 std::string writeTempFile(const std::string& body, const std::string& suffix)
 {
-    std::string path = std::string("/tmp/ctltest_unit_") + suffix;
+    std::string path =
+        (std::filesystem::temp_directory_path() / ("ctltest_unit_" + suffix)).string();
     std::ofstream f(path);
     f << body;
     f.close();
@@ -1389,7 +1404,8 @@ void testImageIOErrors()
     // Missing file to ImageIOError mentioning the path.
     {
         bool threw = false;
-        try { readImage("/tmp/__ctltest_does_not_exist.exr"); }
+        try { readImage((std::filesystem::temp_directory_path()
+                         / "__ctltest_does_not_exist.exr").string()); }
         catch (const ImageIOError& e) {
             threw = true;
             CHECK_CONTAINS(std::string(e.what()), "__ctltest_does_not_exist");
@@ -2008,14 +2024,14 @@ CmdResult runShell(const std::string& cmd)
 {
     CmdResult r;
     const std::string full = cmd + " 2>&1";
-    FILE* p = ::popen(full.c_str(), "r");
+    FILE* p = ctlPopen(full.c_str(), "r");
     if (!p) return r;
     char buf[1024];
     while (size_t n = std::fread(buf, 1, sizeof(buf), p)) {
         r.output.append(buf, n);
     }
-    int rc = ::pclose(p);
-    r.exitCode = (rc == -1) ? -1 : ((WIFEXITED(rc)) ? WEXITSTATUS(rc) : -1);
+    int rc = ctlPclose(p);
+    r.exitCode = (rc == -1) ? -1 : ctlExitCode(rc);
     return r;
 }
 
