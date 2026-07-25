@@ -213,18 +213,25 @@ set(CMAKE_CXX_FLAGS_ASAN
 #                    CTL_LTO: the combined signal lets the link-time
 #                    optimizer see that internal functions have no external
 #                    consumers and can be inlined more aggressively or
-#                    eliminated entirely.  Safe for the default static-
-#                    library + monolithic-executable build used by
-#                    ctlrender / ctlrender-metal; revisit before building
-#                    SHARED libs that need a stable ABI with external
-#                    consumers.
+#                    eliminated entirely.
+#
+#                    Defaults OFF because it breaks RTTI across library
+#                    boundaries.  IlmImfCtl dispatches on image header
+#                    attributes with a dynamic_cast chain over
+#                    Imf::TypedAttribute<T> specializations, and those
+#                    templates are instantiated both in OpenEXR and in CTL.
+#                    Hiding CTL's copies makes their type_info module-local,
+#                    so a cast against an object constructed inside libIlmImf
+#                    no longer matches and every header attribute is reported
+#                    as unconvertible.  Turn it on only for a build that
+#                    links no external C++ library across which RTTI travels.
 option(CTL_NATIVE_ARCH
   "Emit host-specific ISA (-mcpu=native on Apple, -march=native elsewhere) in Release builds"
   ON)
 option(CTL_LTO "Link-time optimization (-flto=thin on Clang, -flto on GCC) in Release builds" ON)
 option(CTL_HIDDEN_VISIBILITY
-  "-fvisibility=hidden + -fvisibility-inlines-hidden in Release builds"
-  ON)
+  "-fvisibility=hidden + -fvisibility-inlines-hidden in Release builds (breaks cross-library RTTI)"
+  OFF)
 
 # Runtime sanitizer instrumentation.  Replaces the normal Release flags
 # with the chosen sanitizer's flags; PGO and LTO are forced off because
