@@ -40,6 +40,21 @@
 #include <string>
 #include <vector>
 
+// setenv is POSIX. MSVC provides _putenv_s instead, which takes the same
+// name and value but has no overwrite flag; it always overwrites, which is
+// what every call here wants.
+namespace {
+int ctlSetEnv(const char* name, const char* value)
+{
+#ifdef _WIN32
+    return _putenv_s(name, value);
+#else
+    return setenv(name, value, 1);
+#endif
+}
+}  // namespace
+
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -112,11 +127,11 @@ int parseArgs(int argc, char** argv, Options& out) {
         } else if (!std::strcmp(a, "--no-color")) {
             out.color = false;
         } else if (!std::strcmp(a, "--update-snapshots")) {
-            setenv("CTL_TEST_UPDATE_SNAPSHOTS", "1", 1);
+            ctlSetEnv("CTL_TEST_UPDATE_SNAPSHOTS", "1");
         } else if (!std::strcmp(a, "--update-snapshots=force")) {
-            setenv("CTL_TEST_UPDATE_SNAPSHOTS", "force", 1);
+            ctlSetEnv("CTL_TEST_UPDATE_SNAPSHOTS", "force");
         } else if (!std::strcmp(a, "--allow-new-snapshots")) {
-            setenv("CTL_TEST_ALLOW_NEW_SNAPSHOTS", "1", 1);
+            ctlSetEnv("CTL_TEST_ALLOW_NEW_SNAPSHOTS", "1");
         } else if (!std::strcmp(a, "-h") || !std::strcmp(a, "--help")) {
             usage(argv[0]);
             return 1;
