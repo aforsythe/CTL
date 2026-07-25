@@ -56,6 +56,7 @@
 #include <testEndOfLine.h>
 #include <testParser.h>
 #include <testPathParser.h>
+#include <testBoolStorage.h>
 #include <testCppCall.h>
 #include <testVarying.h>
 #include <testHugeInit.h>
@@ -76,6 +77,7 @@ main (int argc, char *argv[])
     TEST (testEndOfLine);
     TEST (testParser);
     TEST (testPathParser);
+    TEST (testBoolStorage);
     TEST (testExamples);
     TEST (testCppCall);
     TEST (testVarying);
