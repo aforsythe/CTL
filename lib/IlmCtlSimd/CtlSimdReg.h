@@ -319,7 +319,7 @@ SimdBoolMask::setVarying(bool varying)
 
     if (varying)
     {
-	// non-varying -> varying: acquire a pooled 8 KB buffer,
+	// non-varying to varying: acquire a pooled 8 KB buffer,
 	// broadcast the inline value across MAX_REG_SIZE lanes.
 	bool *data = detail::boolBufferPool().acquire();
 	memset(data, _data[0], MAX_REG_SIZE);
@@ -327,7 +327,7 @@ SimdBoolMask::setVarying(bool varying)
     }
     else
     {
-	// varying -> non-varying: preserve first lane, return the buffer
+	// varying to non-varying: preserve first lane, return the buffer
 	// to the pool, point at inline storage.
 	_inlineData = _data[0];
 	detail::boolBufferPool().release (_data);

@@ -364,7 +364,7 @@ if(NOT MSVC AND (CMAKE_BUILD_TYPE STREQUAL "Release" OR
     ctl_add_release_link_option(-fprofile-generate=${CTL_PGO_PROFILE_DIR})
   elseif(CTL_PGO STREQUAL "USE")
     if(NOT CTL_PGO_PROFILE OR NOT EXISTS "${CTL_PGO_PROFILE}")
-      message(FATAL_ERROR "CTL_PGO=USE requires CTL_PGO_PROFILE to point at an existing .profdata file (got '${CTL_PGO_PROFILE}'). See CMakeLists.txt for the GENERATE -> llvm-profdata merge -> USE workflow.")
+      message(FATAL_ERROR "CTL_PGO=USE requires CTL_PGO_PROFILE to point at an existing .profdata file (got '${CTL_PGO_PROFILE}'). See CMakeLists.txt for the GENERATE, llvm-profdata merge, then USE workflow.")
     endif()
     message(STATUS "CTL_PGO=USE: consuming profile at ${CTL_PGO_PROFILE}")
     add_compile_options($<$<CONFIG:Release>:-fprofile-use=${CTL_PGO_PROFILE}>)

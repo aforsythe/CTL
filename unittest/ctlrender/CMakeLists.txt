@@ -189,7 +189,7 @@ set_tests_properties("ctlrender-maxInstCount-exception" PROPERTIES WILL_FAIL TRU
 # Input RGBA = (0.5, 0.5, 0.5, 1.0); pixel_chain_a.ctl adds 0.25 to R;
 # pixel_chain_b.ctl multiplies G by 2 and halves A.  Expected:
 #   single a:    R=0.75 G=0.5  B=0.5 A=1.0
-#   chain a->b:   R=0.75 G=1.0  B=0.5 A=0.5
+#   chain a to b:   R=0.75 G=1.0  B=0.5 A=0.5
 # Tests assert via PASS_REGULAR_EXPRESSION on stdout.
 add_test(NAME "ctlrender-pixel-rgba-single"
     COMMAND ctlrender
@@ -668,7 +668,7 @@ if(OpenEXR_FOUND)
     endif()
 endif()
 
-# ACES round-trip: ACES -> EXR via unity.  The existing test produces an
+# ACES round-trip: ACES to EXR via unity.  The existing test produces an
 # .aces file from an EXR input; this reads that .aces back through the
 # pipeline as a cross-check that aces_file.cc's read path works on its
 # own writer's output.

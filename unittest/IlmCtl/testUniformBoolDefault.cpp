@@ -55,7 +55,7 @@ testDefaultTrue ()
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_default_true");
-        fc->inputArg(0)->setDefaultValue();   // flag -> true
+        fc->inputArg(0)->setDefaultValue();   // flag becomes true
         fc->callFunction (1);
 
         float r = -42.0f;
@@ -88,7 +88,7 @@ testDefaultFalse ()
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_default_false");
-        fc->inputArg(0)->setDefaultValue();   // flag -> false
+        fc->inputArg(0)->setDefaultValue();   // flag becomes false
         fc->callFunction (1);
 
         float r = -42.0f;
@@ -118,12 +118,12 @@ testDefaultFalse ()
 void
 testTwoBools ()
 {
-    std::cout << "  two bools, both defaults (T+F -> 1.0)\n";
+    std::cout << "  two bools, both defaults (T+F gives 1.0)\n";
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_two_bools");
-        fc->inputArg(0)->setDefaultValue();  // flagA -> true
-        fc->inputArg(1)->setDefaultValue();  // flagB -> false
+        fc->inputArg(0)->setDefaultValue();  // flagA becomes true
+        fc->inputArg(1)->setDefaultValue();  // flagB becomes false
 
         fc->callFunction (1);
         float r = -42.0f;
@@ -131,7 +131,7 @@ testTwoBools ()
         assert (r == 1.0f);
     }
 
-    std::cout << "  two bools, override flagB to true (T+T -> 3.0)\n";
+    std::cout << "  two bools, override flagB to true (T+T gives 3.0)\n";
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_two_bools");
@@ -145,7 +145,7 @@ testTwoBools ()
         assert (r == 3.0f);
     }
 
-    std::cout << "  two bools, override flagA to false (F+F -> 0.0)\n";
+    std::cout << "  two bools, override flagA to false (F+F gives 0.0)\n";
     {
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_two_bools");
@@ -182,7 +182,7 @@ testUniformBroadcastsAcrossLanes ()
         // Promote per-pixel inputs to varying.  The uniform bool stays
         // uniform -- that's the path under test.
         fc->inputArg(0)->setVarying (true);                  // value
-        fc->inputArg(1)->setDefaultValue();                  // flag -> true
+        fc->inputArg(1)->setDefaultValue();                  // flag becomes true
         fc->outputArg(0)->setVarying (true);                 // r
 
         std::vector<float> values (N);
@@ -204,7 +204,7 @@ testUniformBroadcastsAcrossLanes ()
     }
 
     {
-        // Same fixture, host overrides flag -> false.  Every lane should
+        // Same fixture, host overrides flag to false.  Every lane should
         // return 0.0.
         FunctionCallPtr fc = sharedInterp().newFunctionCall (
             "ub_test::ub_with_varying");

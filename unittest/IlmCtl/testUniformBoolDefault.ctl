@@ -44,10 +44,10 @@ ub_default_false (output float r, input uniform bool flag = false)
 //
 // Two adjacent uniform bools.  Encodes both into a single float so we
 // can verify each independently in one call:
-//   r = 0.0  -> flagA=false, flagB=false
-//   r = 1.0  -> flagA=true,  flagB=false
-//   r = 2.0  -> flagA=false, flagB=true
-//   r = 3.0  -> flagA=true,  flagB=true
+//   r = 0.0  means flagA=false, flagB=false
+//   r = 1.0  means flagA=true,  flagB=false
+//   r = 2.0  means flagA=false, flagB=true
+//   r = 3.0  means flagA=true,  flagB=true
 //
 void
 ub_two_bools (output float r,

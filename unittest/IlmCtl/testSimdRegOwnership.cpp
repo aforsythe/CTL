@@ -71,8 +71,8 @@ testTransferDataMakesOriginalSafelyDestructible ()
 	 << endl;
 
     // After transferData=true, ref owns the buffer (state 3) and owner
-    // is state 4 (_data=null).  Destroy ref first -> frees the buffer;
-    // destroy owner second -> delete[] on its now-null _data is a no-op.
+    // is state 4 (_data=null).  Destroy ref first, which frees the buffer;
+    // destroy owner second, so delete[] on its now-null _data is a no-op.
     SimdReg *owner = new SimdReg (true, sizeof(uint32_t));
     fillSentinel(*owner, 0x1234ABCD);
 

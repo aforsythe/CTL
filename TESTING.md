@@ -5,10 +5,10 @@ reason to isolate a subset, check out the top branch
 (`ship/moduleTestFramework-v1`) and test everything from there.**
 
 ```
-ship/moduleTestFramework-v1   <- recommended, all the below + module test framework
-ship/gpu-metal                <- everything in cpu-perf plus the Apple Silicon Metal GPU backend
-ship/cpu-perf                 <- this branch: CPU performance work only
-master                        <- pre-branch baseline
+ship/moduleTestFramework-v1      recommended, all the below + module test framework
+ship/gpu-metal                   everything in cpu-perf plus the Apple Silicon Metal GPU backend
+ship/cpu-perf                    this branch: CPU performance work only
+master                           pre-branch baseline
 ```
 
 Each branch is a proper superset of the one below, so:

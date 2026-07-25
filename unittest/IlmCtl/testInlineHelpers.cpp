@@ -20,7 +20,7 @@ using namespace std;
 
 // Pins the codegen substitutions in CtlSimdSyntaxTree.cpp:
 // SimdCallNode::generateCode swaps idiomatic Lib.Academy.Utilities
-// helpers for SimdCCallInst -> simdFunc1Arg/2Arg<Inline...Float>.  The
+// helpers for SimdCCallInst map to simdFunc1Arg/2Arg<Inline...Float>.  The
 // fixture (testInlineHelpers.ctl) defines those helpers verbatim from
 // aces-core; this test runs each substitution against IEEE-754 specials
 // and confirms bit-equality (with NaN-payload tolerance) against a

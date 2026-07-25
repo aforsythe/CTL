@@ -142,7 +142,7 @@ testStdExceptionInteroperability ()
 {
     cout << "  every Ctl exception is catchable as std::exception" << endl;
 
-    // CtlExc -> Iex::BaseExc -> std::exception.  Anything that catches
+    // CtlExc derives from Iex::BaseExc, which derives from std::exception.  Anything that catches
     // std::exception in user code must see Ctl errors.
     try { throw IndexOutOfRangeExc(string("ioor")); }
     catch (const std::exception &e)

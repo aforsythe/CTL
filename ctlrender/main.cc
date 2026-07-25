@@ -245,22 +245,22 @@ int verbosity = 1;
 // They compose multiplicatively: total active workers ~ jobs x threads.
 // On an N-core machine the right split depends on the batch shape:
 //
-//   1 input file      ->  jobs=1, threads=N      (single-file parallelism
+//   1 input file          jobs=1, threads=N      (single-file parallelism
 //                                                can only come from the
 //                                                tile loop)
-//   M files, M >= N    ->  jobs=N, threads=1      (file parallelism
+//   M files, M >= N       jobs=N, threads=1      (file parallelism
 //                                                dominates; tile
 //                                                threading adds
 //                                                coordination cost for
 //                                                no gain)
-//   few files, M < N  ->  jobs=M, threads=N/M    (split cores evenly;
+//   few files, M < N      jobs=M, threads=N/M    (split cores evenly;
 //                                                both layers contribute)
 //
 // Both flags default to autodetect (0) and the auto logic below picks
 // from this table using hardware_concurrency() and the input count.
 // Explicit values are respected; an explicit -threads survives the
 // jobs-resolver's even split.  Measured on a 16-core M4 Max, 100 x 2K
-// ACES v2 -> tiff8: the auto defaults match hand-tuned within noise
+// ACES v2 to tiff8: the auto defaults match hand-tuned within noise
 // (57.31 s vs 56.30 s for -jobs 16 -threads 1).
 //-----------------------------------------------------------------------------
 

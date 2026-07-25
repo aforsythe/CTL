@@ -151,7 +151,7 @@ MUTATIONS: list[Mutation] = [
         file="ctlrender/transform.cc",
         pattern=r"size_t idx = next_tile\.fetch_add\(1, std::memory_order_relaxed\);",
         replacement="size_t idx = next_tile.load(std::memory_order_relaxed);",
-        description="transform.cc: tile fetch_add -> load (workers race on same tile)",
+        description="transform.cc: tile fetch_add becomes load (workers race on same tile)",
         target="ctlrender",
     ),
 
