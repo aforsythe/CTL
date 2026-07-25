@@ -352,6 +352,24 @@ if(NOT MSVC AND (CMAKE_BUILD_TYPE STREQUAL "Release" OR
       add_compile_options($<$<CONFIG:Release>:-pthread>)
       ctl_add_release_link_option(-pthread)
     endif()
+    # A static archive written by plain ar carries no LTO symbol table, so the
+    # link-time plugin cannot see the definitions inside it and every reference
+    # into that archive comes back undefined.  gcc-ar and gcc-ranlib load the
+    # plugin and write an index the linker can actually use.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+      find_program(CTL_GCC_AR NAMES gcc-ar)
+      find_program(CTL_GCC_RANLIB NAMES gcc-ranlib)
+      if(CTL_GCC_AR AND CTL_GCC_RANLIB)
+        set(CMAKE_AR "${CTL_GCC_AR}")
+        set(CMAKE_RANLIB "${CTL_GCC_RANLIB}")
+      else()
+        message(WARNING
+          "CTL_LTO=ON under GCC but gcc-ar/gcc-ranlib were not found; static "
+          "archives will carry no LTO symbol index.  Configure with "
+          "-DCTL_LTO=OFF if the link reports undefined references to symbols "
+          "this project defines.")
+      endif()
+    endif()
   endif()
   if(CTL_HIDDEN_VISIBILITY)
     add_compile_options(

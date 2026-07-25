@@ -44,7 +44,10 @@ if(OpenEXR_FOUND)
             # archives do not carry the dependency, so iex_debugTrap and the
             # thread pool have to be named here explicitly.
             $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
-            $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>)
+            $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>
+            # OpenEXR 2.x's compressors call zlib directly; 3.x pulls it in
+            # itself, 2.x leaves it to the consumer.
+            $<$<TARGET_EXISTS:ZLIB::ZLIB>:ZLIB::ZLIB>)
 
     # Reference generator for the parallel float->half tests.  Runs an
     # unambiguously-serial conversion in a separate process, so the
@@ -62,7 +65,10 @@ if(OpenEXR_FOUND)
             # archives do not carry the dependency, so iex_debugTrap and the
             # thread pool have to be named here explicitly.
             $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
-            $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>)
+            $<$<TARGET_EXISTS:IlmBase::Iex>:IlmBase::Iex>
+            # OpenEXR 2.x's compressors call zlib directly; 3.x pulls it in
+            # itself, 2.x leaves it to the consumer.
+            $<$<TARGET_EXISTS:ZLIB::ZLIB>:ZLIB::ZLIB>)
 endif()
 
 foreach(J tiff8 tiff16 tiff32 dpx8 dpx10 dpx12 dpx16)
@@ -383,7 +389,9 @@ if(OpenEXR_FOUND)
             "format-unknown;-format;mystery;-ctl;${TEST_FILES}/unity.ctl;${_FX};${_OUT}/x.mystery"
             "global-param1-no-arg;-global_param1"
             "unknown-option;-nonsense;-ctl;${TEST_FILES}/unity.ctl;${_FX};${_OUT}/x.exr")
-        list(POP_FRONT EBASE _NAME)
+        # list(POP_FRONT) needs CMake 3.15 and this project declares 3.12.
+        list(GET EBASE 0 _NAME)
+        list(REMOVE_AT EBASE 0)
         add_test(NAME "ctlrender-${_NAME}-errors" COMMAND ${CTLRENDER_PATH} ${EBASE})
         set_tests_properties("ctlrender-${_NAME}-errors" PROPERTIES WILL_FAIL TRUE)
     endforeach()
@@ -595,7 +603,11 @@ if(OpenEXR_FOUND)
         add_test(NAME "ctlrender-property-vector-parity-smoke"
             COMMAND ${Python3_EXECUTABLE}
                 "${PROJECT_SOURCE_DIR}/tools/property_test_simd_parity.py"
-                --ctlrender "${CTLRENDER_PATH}"
+                # Not CTLRENDER_PATH: that is a hardcoded path with neither the
+                # per-config directory nor the .exe suffix Windows needs.  ctest
+                # fills those in when it launches a command itself, but this
+                # path is an argument that Python hands to a child process.
+                --ctlrender "$<TARGET_FILE:ctlrender>"
                 --input    "${TEST_FILES}/colorbars_nuke_rgb_exr32.exr"
                 --workdir  "${_OUT}/property_smoke"
                 --count 8
