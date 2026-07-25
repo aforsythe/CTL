@@ -1499,6 +1499,141 @@ const char * const kPreamble =
     "}\n"
     "\n"
     //
+    // `lookup3DTetra_f3` — tetrahedral 3D table lookup returning a
+    // float[3] voxel. Port of `Ctl::lookup3DTetra` in
+    // `lib/IlmCtlMath/CtlLookupTable.cpp`: identical clamp / weight /
+    // index derivation to the trilinear helper above, but the cell is
+    // split into six tetrahedra around its main diagonal and only the
+    // four corners of the tetrahedron containing (u, v, w) are
+    // blended, with weights (1-hi, hi-mid, mid-lo, lo) from the
+    // sorted fractions. The comparison ladder is exact (no rounding),
+    // so CPU and GPU always select the same tetrahedron; parity risk
+    // is confined to the four-term blend. Like the trilinear blend,
+    // the CPU reference compiles to discrete fsub/fmul/fadd with no
+    // fmadd (verified against the disassembly of `lookup3DTetra` in
+    // the linked Release binary — the V3f operator calls keep each
+    // multiply and add in separate source expressions, which blocks
+    // `-ffp-contract=on` fusion), so the weight subtractions and the
+    // left-associated accumulation below must stay discrete ops under
+    // `FP_CONTRACT OFF`. Explicit `metal::fma` would drift 1 ULP.
+    //
+    "__attribute__((noinline))\n"
+    "static metal::array<float, 3> ctl_stdlib_lookup3DTetra_f3(\n"
+    "    thread const float* table,\n"
+    "    uint size0, uint size1, uint size2,\n"
+    "    metal::array<float, 3> pMin,\n"
+    "    metal::array<float, 3> pMax,\n"
+    "    metal::array<float, 3> p)\n"
+    "{\n"
+    "    int iMax = int(size0) - 1;\n"
+    "    int jMax = int(size1) - 1;\n"
+    "    int kMax = int(size2) - 1;\n"
+    "    float cx = (p[0] < pMin[0]) ? pMin[0] : ((p[0] > pMax[0]) ? pMax[0] : p[0]);\n"
+    "    float cy = (p[1] < pMin[1]) ? pMin[1] : ((p[1] > pMax[1]) ? pMax[1] : p[1]);\n"
+    "    float cz = (p[2] < pMin[2]) ? pMin[2] : ((p[2] > pMax[2]) ? pMax[2] : p[2]);\n"
+    "    float rx = (cx - pMin[0]) / (pMax[0] - pMin[0]) * float(iMax);\n"
+    "    float ry = (cy - pMin[1]) / (pMax[1] - pMin[1]) * float(jMax);\n"
+    "    float rz = (cz - pMin[2]) / (pMax[2] - pMin[2]) * float(kMax);\n"
+    "    int i, i1; float u;\n"
+    "    if (rx >= 0.0f) {\n"
+    "        if (rx < float(iMax)) { i = int(rx); i1 = i + 1; u = rx - float(i); }\n"
+    "        else                  { i = iMax; i1 = iMax; u = 1.0f; }\n"
+    "    } else                    { i = 0; i1 = 0; u = 1.0f; }\n"
+    "    int j, j1; float v;\n"
+    "    if (ry >= 0.0f) {\n"
+    "        if (ry < float(jMax)) { j = int(ry); j1 = j + 1; v = ry - float(j); }\n"
+    "        else                  { j = jMax; j1 = jMax; v = 1.0f; }\n"
+    "    } else                    { j = 0; j1 = 0; v = 1.0f; }\n"
+    "    int k, k1; float w;\n"
+    "    if (rz >= 0.0f) {\n"
+    "        if (rz < float(kMax)) { k = int(rz); k1 = k + 1; w = rz - float(k); }\n"
+    "        else                  { k = kMax; k1 = kMax; w = 1.0f; }\n"
+    "    } else                    { k = 0; k1 = 0; w = 1.0f; }\n"
+    "    int sy = int(size1);\n"
+    "    int sz = int(size2);\n"
+    "    int idxA = (i  * sy + j ) * sz + k;\n"
+    "    int idxB = (i1 * sy + j ) * sz + k;\n"
+    "    int idxC = (i  * sy + j1) * sz + k;\n"
+    "    int idxD = (i1 * sy + j1) * sz + k;\n"
+    "    int idxE = (i  * sy + j ) * sz + k1;\n"
+    "    int idxF = (i1 * sy + j ) * sz + k1;\n"
+    "    int idxG = (i  * sy + j1) * sz + k1;\n"
+    "    int idxH = (i1 * sy + j1) * sz + k1;\n"
+    "    float w0, wa, wb, wc;\n"
+    "    int ia, ib;\n"
+    "    if (u > v) {\n"
+    "        if (v > w)      { w0 = 1.0f - u; wa = u - v; wb = v - w; wc = w;\n"
+    "                          ia = idxB; ib = idxD; }\n"
+    "        else if (u > w) { w0 = 1.0f - u; wa = u - w; wb = w - v; wc = v;\n"
+    "                          ia = idxB; ib = idxF; }\n"
+    "        else            { w0 = 1.0f - w; wa = w - u; wb = u - v; wc = v;\n"
+    "                          ia = idxE; ib = idxF; }\n"
+    "    } else {\n"
+    "        if (w > v)      { w0 = 1.0f - w; wa = w - v; wb = v - u; wc = u;\n"
+    "                          ia = idxE; ib = idxG; }\n"
+    "        else if (w > u) { w0 = 1.0f - v; wa = v - w; wb = w - u; wc = u;\n"
+    "                          ia = idxC; ib = idxG; }\n"
+    "        else            { w0 = 1.0f - v; wa = v - u; wb = u - w; wc = w;\n"
+    "                          ia = idxC; ib = idxD; }\n"
+    "    }\n"
+    "    metal::array<float, 3> out;\n"
+    "    for (int c = 0; c < 3; ++c) {\n"
+    "        float acc = w0 * table[idxA * 3 + c];\n"
+    "        acc = acc + wa * table[ia * 3 + c];\n"
+    "        acc = acc + wb * table[ib * 3 + c];\n"
+    "        acc = acc + wc * table[idxH * 3 + c];\n"
+    "        out[c] = acc;\n"
+    "    }\n"
+    "    return out;\n"
+    "}\n"
+    "\n"
+    //
+    // `lookup3DTetra_f` — scalar-in, scalar-out tetrahedral lookup.
+    // Same ABI shape as `lookup3D_f`; delegates to
+    // `ctl_stdlib_lookup3DTetra_f3` exactly the way the CPU
+    // `simdLookup3DTetra_f` packs a V3f and calls `lookup3DTetra`.
+    //
+    "static inline void ctl_stdlib_lookup3DTetra_f(\n"
+    "    thread const float *table,\n"
+    "    uint size0, uint size1, uint size2,\n"
+    "    metal::array<float, 3> pMin,\n"
+    "    metal::array<float, 3> pMax,\n"
+    "    float p0, float p1, float p2,\n"
+    "    thread float &q0, thread float &q1, thread float &q2)\n"
+    "{\n"
+    "    metal::array<float, 3> p;\n"
+    "    p[0] = p0; p[1] = p1; p[2] = p2;\n"
+    "    metal::array<float, 3> r = ctl_stdlib_lookup3DTetra_f3(\n"
+    "        table, size0, size1, size2, pMin, pMax, p);\n"
+    "    q0 = r[0];\n"
+    "    q1 = r[1];\n"
+    "    q2 = r[2];\n"
+    "}\n"
+    "\n"
+    //
+    // `lookup3DTetra_h` — half scalar inputs/outputs around the same
+    // float-precision tetrahedral core, mirroring `lookup3D_h`: the
+    // half→float promotion is lossless and the final float→half
+    // assignment rounds to nearest even on both backends.
+    //
+    "static inline void ctl_stdlib_lookup3DTetra_h(\n"
+    "    thread const float *table,\n"
+    "    uint size0, uint size1, uint size2,\n"
+    "    metal::array<float, 3> pMin,\n"
+    "    metal::array<float, 3> pMax,\n"
+    "    half p0, half p1, half p2,\n"
+    "    thread half &q0, thread half &q1, thread half &q2)\n"
+    "{\n"
+    "    metal::array<float, 3> p;\n"
+    "    p[0] = float(p0); p[1] = float(p1); p[2] = float(p2);\n"
+    "    metal::array<float, 3> r = ctl_stdlib_lookup3DTetra_f3(\n"
+    "        table, size0, size1, size2, pMin, pMax, p);\n"
+    "    q0 = half(r[0]);\n"
+    "    q1 = half(r[1]);\n"
+    "    q2 = half(r[2]);\n"
+    "}\n"
+    "\n"
+    //
     // `scatteredDataToGrid3D` — full MSL port of CtlRbfInterpolator.
     //
     // Runs the CPU algorithm in its entirety on the GPU: a 12-coefficient

@@ -798,6 +798,24 @@ declareMetalStdLibrary(LContext &lcontext)
                           funcTypeV_F0003_F3_F3_HHH_OHHH(lcontext));
 
     //
+    // `lookup3DTetra_f3` / `_f` / `_h` — tetrahedral variants of the
+    // trio above. Same signatures (the interpolation method is the
+    // only difference), so the three function types are reused. The
+    // MSL helpers in the codegen preamble share the trilinear
+    // helper's clamp/index prologue and blend only the four corners
+    // of the tetrahedron containing the fractional coordinates.
+    //
+    declareStdLibFunction(lcontext, "lookup3DTetra_f3",
+                          "ctl_stdlib_lookup3DTetra_f3",
+                          funcTypeF3_F0003_F3_F3_F3(lcontext));
+    declareStdLibFunction(lcontext, "lookup3DTetra_f",
+                          "ctl_stdlib_lookup3DTetra_f",
+                          funcTypeV_F0003_F3_F3_FFF_OFFF(lcontext));
+    declareStdLibFunction(lcontext, "lookup3DTetra_h",
+                          "ctl_stdlib_lookup3DTetra_h",
+                          funcTypeV_F0003_F3_F3_HHH_OHHH(lcontext));
+
+    //
     // `scatteredDataToGrid3D` -- RBF interpolation over scattered
     // `(V3f position, V3f value)` pairs, sampled onto a regular 3D
     // grid. The CPU SIMD backend constructs a `Ctl::RbfInterpolator`
