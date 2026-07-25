@@ -1,4 +1,4 @@
-// ctltest_unit — C++ unit tests for ctltest_core's public API. Separate
+// ctltest_unit -- C++ unit tests for ctltest_core's public API. Separate
 // from the self-test YAML suites under moduletest/tests/selftest/, which
 // exercise the framework end-to-end against real CTL modules. This binary
 // drives the pure-library pieces directly:
@@ -12,7 +12,7 @@
 //     (exercises the v1.1 CtlType::childElementV fix end-to-end)
 //
 // Written as a single hand-rolled harness that matches the style of
-// unittest/IlmCtl/main.cpp — one `TEST(name)` per suite, early abort on
+// unittest/IlmCtl/main.cpp -- one `TEST(name)` per suite, early abort on
 // CHECK failure so regressions are visible in both Debug and Release.
 
 #include "CaseModel.h"
@@ -354,19 +354,19 @@ void testCompareTyped()
 
     // Passing condition is "abs OR rel OR ulp" (any one satisfies).
     {
-        Tolerance t; t.abs = 1.0e-9; t.rel = 1.0;  // 100% rel -> always passes
+        Tolerance t; t.abs = 1.0e-9; t.rel = 1.0;  // 100% rel always passes
         auto d = compareOne(Value::makeFloat(1.0), Value::makeFloat(2.0), t);
         CHECK(d.empty());
     }
 
     // Half rounding: an authored expected of 0.1 must be rounded to the
-    // nearest-even half (≈0.099975586) before comparison. The Half branch of
+    // nearest-even half (~0.099975586) before comparison. The Half branch of
     // compareTyped fires when `got.kind == Half` (mirroring the real path
     // where a CTL function returns a half and fromArg rebuilds it as Kind::Half).
     {
         Tolerance t; t.abs = 1.0e-6;
         // Author expected as Float 0.1 (raw, as one would write in YAML).
-        // Observed value is Half carrying the nearest-even half of 0.1 —
+        // Observed value is Half carrying the nearest-even half of 0.1 --
         // after rounding, both sides reduce to the same representable half.
         Value exp = Value::makeFloat(0.1);
         Value got = Value::makeHalf(static_cast<double>(static_cast<float>(
@@ -719,7 +719,7 @@ void testMarshalNestedArrayRoundTrip()
 
 void testMarshalStructWithArrayMemberRoundTrip()
 {
-    // v1.1: struct containing an array member (struct -> array -> scalar path).
+    // v1.1: struct containing an array member (struct to array to scalar path).
     Section s("Marshal struct-with-array round-trip (v1.1)");
     InterpRunner r;
     initInterp(r);
@@ -743,7 +743,7 @@ void testMarshalStructWithArrayMemberRoundTrip()
 
 void testMarshalArrayOfStructRoundTrip()
 {
-    // v1.1: array of struct (array -> struct -> scalar path).
+    // v1.1: array of struct (array to struct to scalar path).
     Section s("Marshal array-of-struct round-trip (v1.1)");
     InterpRunner r;
     initInterp(r);
@@ -760,7 +760,7 @@ void testMarshalArrayOfStructRoundTrip()
 }
 
 // ============================================================================
-// v1.2 hardening pass — additional unit tests for previously-uncovered
+// v1.2 hardening pass -- additional unit tests for previously-uncovered
 // public surfaces. Organized in the same `void test*()` style as above.
 // ============================================================================
 
@@ -805,7 +805,7 @@ void testValueSeqAndMap()
 {
     Section s("Value Seq+Map deep nesting");
 
-    // Map of Seq of Map — three-level nest. testValue covers the flat case;
+    // Map of Seq of Map -- three-level nest. testValue covers the flat case;
     // this guards against regressions in the recursive Value::describe path
     // and the makeSeq/makeMap factory shape.
     Value nested = Value::makeMap({
@@ -883,13 +883,13 @@ void testToleranceEmptyAndPerField()
     CHECK_CONTAINS(diags.front().path, "b");
 }
 
-// ---------------------------------------------------------------- compareTyped — deep nested diagnostic paths
+// ---------------------------------------------------------------- compareTyped -- deep nested diagnostic paths
 
 void testCompareTypedDeepNestedPaths()
 {
     Section s("compareTyped deep paths");
 
-    // Map -> Map -> Seq -> Map -> leaf.  Path on mismatch should be
+    // Map to Map to Seq to Map to leaf.  Path on mismatch should be
     // "out.v[0].x".
     Value exp = Value::makeMap({
         {"out", Value::makeMap({
@@ -916,7 +916,7 @@ void testCompareTypedDeepNestedPaths()
     CHECK(diags.front().abs_err > 90.0);
 }
 
-// ---------------------------------------------------------------- compareTyped — map missing/extra keys
+// ---------------------------------------------------------------- compareTyped -- map missing/extra keys
 
 void testCompareTypedMapMissingExtraKeys()
 {
@@ -949,7 +949,7 @@ void testCompareTypedMapMissingExtraKeys()
     CHECK(sawMissing);
 }
 
-// ---------------------------------------------------------------- compareTyped — seq size + ULP tolerance
+// ---------------------------------------------------------------- compareTyped -- seq size + ULP tolerance
 
 void testCompareTypedSeqSizeAndUlp()
 {
@@ -986,7 +986,7 @@ void testCompareTypedSeqSizeAndUlp()
     }
 }
 
-// ---------------------------------------------------------------- validateTolerancePaths — deep paths + per_channel scope
+// ---------------------------------------------------------------- validateTolerancePaths -- deep paths + per_channel scope
 
 void testValidateTolerancePathsDeepAndPerChannel()
 {
@@ -1009,7 +1009,7 @@ void testValidateTolerancePathsDeepAndPerChannel()
         CHECK(diags.empty());
     }
 
-    // Bracket index: "return[0].x" resolves through Seq -> Map -> Float.
+    // Bracket index: "return[0].x" resolves through Seq to Map to Float.
     {
         Tolerance t;
         t.per_field["return[0].x"].abs = 1e-4;
@@ -1240,12 +1240,12 @@ void testJUnitReporterXml()
     CHECK_CONTAINS(out, "name=\"beta &lt; gamma\"");   // attribute escape
     CHECK_CONTAINS(out, "<failure");
     CHECK_CONTAINS(out, "<error");
-    // Element-content escape: '&' -> &amp;, '<' -> &lt;, '>' -> &gt;.
+    // Element-content escape: '&' to &amp;, '<' to &lt;, '>' to &gt;.
     CHECK_CONTAINS(out, "boom &amp; crash &lt;oops&gt;");
     CHECK_CONTAINS(out, "<skipped/>");
 }
 
-// ---------------------------------------------------------------- Reporters — duration handling
+// ---------------------------------------------------------------- Reporters -- duration handling
 
 void testReporterTimeReporting()
 {
@@ -1364,7 +1364,7 @@ void testImageIOErrors()
 {
     Section s("ImageIO errors");
 
-    // Missing file → ImageIOError mentioning the path.
+    // Missing file to ImageIOError mentioning the path.
     {
         bool threw = false;
         try { readImage("/tmp/__ctltest_does_not_exist.exr"); }
@@ -1386,7 +1386,7 @@ void testImageIOErrors()
     }
 }
 
-// ---------------------------------------------------------------- ImageCompare — abs/rel/ulp
+// ---------------------------------------------------------------- ImageCompare -- abs/rel/ulp
 
 void testCompareImagesAbsRelUlp()
 {
@@ -1396,7 +1396,7 @@ void testCompareImagesAbsRelUlp()
     expected.width = 2; expected.height = 1;
     expected.channels["R"] = {1.0f, 1000.0f};
 
-    // ABS: difference 1e-3 — passes with abs=1e-2, fails with abs=1e-6.
+    // ABS: difference 1e-3 -- passes with abs=1e-2, fails with abs=1e-6.
     {
         Image actual = expected;
         actual.channels["R"][0] = 1.001f;
@@ -1411,7 +1411,7 @@ void testCompareImagesAbsRelUlp()
         CHECK_EQ(r2.mismatchCount, size_t(1));
     }
 
-    // REL: difference 1.0 against 1000 — 1e-3 relative; passes with rel=1e-2.
+    // REL: difference 1.0 against 1000 -- 1e-3 relative; passes with rel=1e-2.
     {
         Image actual = expected;
         actual.channels["R"][1] = 1001.0f;
@@ -1420,7 +1420,7 @@ void testCompareImagesAbsRelUlp()
         CHECK(r.passed);
     }
 
-    // ULP: 1.0 vs nextafter — 1 ULP. Pass with ulp=1, fail with ulp=0.
+    // ULP: 1.0 vs nextafter -- 1 ULP. Pass with ulp=1, fail with ulp=0.
     {
         Image actual = expected;
         actual.channels["R"][0] = std::nextafterf(1.0f, 2.0f);
@@ -1624,7 +1624,7 @@ void testCsvOracleAlignment()
         CHECK(!v.passed);
     }
 
-    // Header-only CSV → empty rows error.
+    // Header-only CSV to empty rows error.
     {
         const std::string emptyCsv = td / "empty.csv";
         std::ofstream f(emptyCsv);
@@ -1643,7 +1643,7 @@ void testCsvOracleAlignment()
         CHECK(!v.failures.empty());
     }
 
-    // Missing CSV file → load failure diagnostic.
+    // Missing CSV file to load failure diagnostic.
     {
         TestCase tc;
         tc.tolerance.abs = 1e-6;
@@ -1677,7 +1677,7 @@ void testSnapshotOracleGates()
     std::map<std::string, Value> outputs;
     outputs["return"] = Value::makeFloat(0.5);
 
-    // Missing file, no gates → FAIL with "no snapshot recorded".
+    // Missing file, no gates to FAIL with "no snapshot recorded".
     {
         EnvGuard g1("CTL_TEST_UPDATE_SNAPSHOTS",    nullptr);
         EnvGuard g2("CTL_TEST_ALLOW_NEW_SNAPSHOTS", nullptr);
@@ -1688,7 +1688,7 @@ void testSnapshotOracleGates()
         CHECK(!std::filesystem::exists(tc.oracle.snapshotPath));
     }
 
-    // Missing file, gates 1+2+3 all set → write + PASS.
+    // Missing file, gates 1+2+3 all set to write + PASS.
     const std::string newPath = td / "newfile.yaml";
     {
         EnvGuard g1("CTL_TEST_UPDATE_SNAPSHOTS",    "1");
@@ -1699,7 +1699,7 @@ void testSnapshotOracleGates()
         CHECK(std::filesystem::exists(newPath));
     }
 
-    // Existing file matches → PASS without env gates.
+    // Existing file matches to PASS without env gates.
     {
         EnvGuard g1("CTL_TEST_UPDATE_SNAPSHOTS",    nullptr);
         EnvGuard g2("CTL_TEST_ALLOW_NEW_SNAPSHOTS", nullptr);
@@ -1708,7 +1708,7 @@ void testSnapshotOracleGates()
         CHECK(v.passed);
     }
 
-    // Existing file mismatches, no gates → FAIL with diagnostics.
+    // Existing file mismatches, no gates to FAIL with diagnostics.
     {
         EnvGuard g1("CTL_TEST_UPDATE_SNAPSHOTS",    nullptr);
         EnvGuard g2("CTL_TEST_ALLOW_NEW_SNAPSHOTS", nullptr);
@@ -1720,7 +1720,7 @@ void testSnapshotOracleGates()
         CHECK(!v.failures.empty());
     }
 
-    // Existing file mismatches, gates 1+2+force → overwrite + PASS.
+    // Existing file mismatches, gates 1+2+force to overwrite + PASS.
     {
         EnvGuard g1("CTL_TEST_UPDATE_SNAPSHOTS", "force");
         TestCase tc = makeTC(newPath, /*writable=*/true);
@@ -1729,7 +1729,7 @@ void testSnapshotOracleGates()
         OracleVerdict v = oracle.check(tc, drift);
         CHECK(v.passed);
 
-        // Re-check without gates: file should now contain 0.6 -> match drift.
+        // Re-check without gates: file should now contain 0.6 to match drift.
         EnvGuard g3("CTL_TEST_UPDATE_SNAPSHOTS", nullptr);
         TestCase tc2 = makeTC(newPath, /*writable=*/false);
         OracleVerdict v2 = oracle.check(tc2, drift);
@@ -1828,7 +1828,7 @@ void testTestKitDrainAndCtlNative()
         CHECK_EQ(a.size(), size_t(2));
         CHECK(a[0].passed);
         CHECK(!a[1].passed);
-        // ExpectNearF: actual=0, expected=1, abs_err≈1
+        // ExpectNearF: actual=0, expected=1, abs_err~1
         CHECK(a[1].kind == TestAssertion::Kind::ExpectNearF);
         CHECK_NEAR(a[1].abs_err, 1.0, 1e-6);
     }
@@ -1938,9 +1938,9 @@ void testRunSuiteKnownFailureInversion()
 
     Suite suite;
     suite.name = "kf";
-    // A case that would ordinarily pass, marked known_failure -> UnexpectedPass.
+    // A case that would ordinarily pass, marked known_failure to UnexpectedPass.
     suite.tests.push_back(makeScalarCase("xpass", 0.5, 0.5, /*knownFailure=*/true));
-    // A case that would ordinarily fail, marked known_failure -> Pass.
+    // A case that would ordinarily fail, marked known_failure to Pass.
     suite.tests.push_back(makeScalarCase("xfail", 0.5, 0.6, /*knownFailure=*/true));
 
     RecordingReporter rep;
@@ -1962,7 +1962,7 @@ void testRunSuiteEmpty()
     CHECK_EQ(counts.total(), size_t(0));
     CHECK_EQ(counts.nonPassing(), size_t(0));
 
-    // begin + end only — no case events.
+    // begin + end only -- no case events.
     CHECK_EQ(rep.events.size(), size_t(2));
     CHECK_CONTAINS(rep.events[0], "begin:empty:0");
     CHECK_CONTAINS(rep.events[1], "end:0/0/0/0/0");
@@ -2090,13 +2090,13 @@ void testCliBadArgs()
 {
     Section s("CLI bad args");
 
-    // Unknown option → exit 2 with "unknown option" on stderr.
+    // Unknown option to exit 2 with "unknown option" on stderr.
     {
         CmdResult r = runShell(std::string(CTLTEST_CLI_BINARY) + " --bogus-flag");
         CHECK(r.exitCode != 0);
         CHECK_CONTAINS(r.output, "unknown option");
     }
-    // Missing positional argument → exit 2 with usage.
+    // Missing positional argument to exit 2 with usage.
     {
         CmdResult r = runShell(std::string(CTLTEST_CLI_BINARY));
         CHECK(r.exitCode != 0);
@@ -2147,7 +2147,7 @@ void testYamlLoaderMissingRequiredFields()
 {
     Section s("YamlLoader missing required fields");
 
-    // No `modules:` key -> required-key error.
+    // No `modules:` key to required-key error.
     {
         std::string body =
             "version: 1\n"
@@ -2167,7 +2167,7 @@ void testYamlLoaderMissingRequiredFields()
         CHECK(threw);
     }
 
-    // Test missing `function:` -> required-key error.
+    // Test missing `function:` to required-key error.
     {
         std::string body =
             "version: 1\n"
@@ -2183,7 +2183,7 @@ void testYamlLoaderMissingRequiredFields()
         CHECK(threw);
     }
 
-    // Test missing `id:` -> required-key error.
+    // Test missing `id:` to required-key error.
     {
         std::string body =
             "version: 1\n"
@@ -2206,7 +2206,7 @@ void testYamlLoaderUnknownKeys()
 
     // Document the loader's behavior on unknown keys: it parses the known
     // schema and silently ignores extra keys at suite + test level. This
-    // test pins the lenient contract — tighten it in a future schema bump.
+    // test pins the lenient contract -- tighten it in a future schema bump.
     std::string body =
         "version: 1\n"
         "modules: [st_scalar]\n"
@@ -2249,7 +2249,7 @@ int main(int argc, char* argv[])
     if (want("MarshalStructWithArray"))             TEST(testMarshalStructWithArrayMemberRoundTrip);
     if (want("MarshalArrayOfStruct"))               TEST(testMarshalArrayOfStructRoundTrip);
 
-    // v1.2 hardening — additional unit tests.
+    // v1.2 hardening -- additional unit tests.
     if (want("ValueDescribe"))                      TEST(testValueDescribe);
     if (want("ValueSeqAndMap"))                     TEST(testValueSeqAndMap);
     if (want("ToleranceEmptyAndPerField"))          TEST(testToleranceEmptyAndPerField);

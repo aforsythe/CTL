@@ -8,7 +8,7 @@
 
 namespace ctltest {
 
-// TAP v14 reporter — https://testanything.org/tap-version-14-specification.html
+// TAP v14 reporter -- https://testanything.org/tap-version-14-specification.html
 //
 // Emits one TAP stream across all suites:
 //   TAP version 14

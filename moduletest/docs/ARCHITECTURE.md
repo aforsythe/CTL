@@ -10,28 +10,28 @@ type. If you're trying to *use* the framework, read
 ## Top-level shape
 
 ```
-         ┌───────────────┐             ┌───────────────┐
-         │  ctltest      │             │ ctltest_run_  │
-         │   (CLI bin)   │             │   one (ctest) │
-         └──────┬────────┘             └──────┬────────┘
-                │                             │
-                │    both link against...     │
-                ▼                             ▼
-           ┌──────────────────────────────────┐
-           │          ctltest_core            │
-           │   (static lib; all the logic)    │
-           └──────────────────────────────────┘
-                         │
-                         ├─ IlmCtl, IlmCtlSimd, IlmCtlMath   (CTL)
-                         ├─ Imath, Half, Iex, OpenEXR        (image + FP types)
-                         └─ yaml-cpp                         (PRIVATE)
+         +---------------+             +---------------+
+         |  ctltest      |             | ctltest_run_  |
+         |   (CLI bin)   |             |   one (ctest) |
+         +------+--------+             +------+--------+
+                |                             |
+                |    both link against...     |
+                v                             v
+           +----------------------------------+
+           |          ctltest_core            |
+           |   (static lib; all the logic)    |
+           +----------------------------------+
+                         |
+                         +- IlmCtl, IlmCtlSimd, IlmCtlMath   (CTL)
+                         +- Imath, Half, Iex, OpenEXR        (image + FP types)
+                         +- yaml-cpp                         (PRIVATE)
 ```
 
 Everything that isn't argument parsing or stream-plumbing lives in
 `ctltest_core`. The two front-ends are deliberately thin so their
 behaviors cannot drift from each other.
 
-There's also a third binary — `ctltest_unit` — that runs C++ unit tests
+There's also a third binary -- `ctltest_unit` -- that runs C++ unit tests
 against `ctltest_core`'s public API. It is registered under the
 `ctltest-unit` ctest label (vs `ctltest` for YAML-driven tests).
 
@@ -39,41 +39,41 @@ against `ctltest_core`'s public API. It is registered under the
 
 ```
    YAML file                                Reporter output
-       │                                          ▲
-       ▼                                          │
- ┌──────────────┐                          ┌──────────────┐
- │ YamlLoader   │   loadSuite()            │  Reporter    │
- │              │ ──────────────┐          │  (Console /  │
- └──────────────┘               │          │   TAP /      │
-                                ▼          │   JUnit)     │
-                         ┌──────────────┐  └──────┬───────┘
-                         │   Suite      │         ▲
-                         │   TestCase   │         │
-                         └──────┬───────┘         │
-                                │                 │
-                                ▼                 │
-                         ┌──────────────┐         │
-                         │  Runner      │─────────┤ CaseResult
-                         └──┬─────────┬─┘         │
-                            │         │           │
-               ┌────────────┘         └────────┐  │
-               ▼                               ▼  │
-       ┌──────────────┐                ┌──────────────┐
-       │ InterpRunner │                │   Oracle     │
-       │              │                │  (Inline /   │
-       │  ┌──────────┐│                │   Csv / Exr/ │
-       │  │ SimdInt- ││ outputs        │   Snapshot)  │
-       │  │ erpreter ││──────────────▶ │              │
-       │  └──────────┘│                │   uses       │
-       │        ▲     │                │  compareTyped│
-       │        │     │                └──────────────┘
-       │   Marshal    │
-       │  (TypeStorage│
-       │   set/get)   │
-       └──────────────┘
+       |                                          ^
+       v                                          |
+ +--------------+                          +--------------+
+ | YamlLoader   |   loadSuite()            |  Reporter    |
+ |              | --------------+          |  (Console /  |
+ +--------------+               |          |   TAP /      |
+                                v          |   JUnit)     |
+                         +--------------+  +------+-------+
+                         |   Suite      |         ^
+                         |   TestCase   |         |
+                         +------+-------+         |
+                                |                 |
+                                v                 |
+                         +--------------+         |
+                         |  Runner      |---------+ CaseResult
+                         +--+---------+-+         |
+                            |         |           |
+               +------------+         +--------+  |
+               v                               v  |
+       +--------------+                +--------------+
+       | InterpRunner |                |   Oracle     |
+       |              |                |  (Inline /   |
+       |  +----------+|                |   Csv / Exr/ |
+       |  | SimdInt- || outputs        |   Snapshot)  |
+       |  | erpreter ||--------------> |              |
+       |  +----------+|                |   uses       |
+       |        ^     |                |  compareTyped|
+       |        |     |                +--------------+
+       |   Marshal    |
+       |  (TypeStorage|
+       |   set/get)   |
+       +--------------+
 ```
 
-The same pipeline runs for every test mode — only the source of inputs
+The same pipeline runs for every test mode -- only the source of inputs
 (YAML `inputs:`, sweep CSV, image EXR, or none for ctl_native) and the
 oracle subclass differ.
 
@@ -84,7 +84,7 @@ oracle subclass differ.
 | Case model      | `CaseModel.{h,cc}`, `Result.{h,cc}` | Pure-data shapes: `Value`, `Tolerance`, `TestCase`, `Suite`, `Diagnostic`, `CaseResult`. |
 | YAML surface    | `YamlLoader.{h,cc}`           | `Suite loadSuite(path)`. All YAML validation happens here. |
 | CSV surface     | `CsvTable.{h,cc}`             | Small CSV parser (header + comma + quotes). |
-| Snapshot I/O    | `ValueIO.{h,cc}`              | Read/write snapshot YAML files (map of name → Value). |
+| Snapshot I/O    | `ValueIO.{h,cc}`              | Read/write snapshot YAML files (map of name to Value). |
 | Marshal         | `Marshal.{h,cc}`              | Only place that touches CTL FunctionArg layouts. Uses `TypeStorage` exclusively. |
 | Interpreter     | `InterpRunner.{h,cc}`, `TestKit.{h,cc}` | Owns one `SimdInterpreter` per test; `TestKit` registers `testkit::*` SimdCFuncs. |
 | Oracles         | `Oracle.{h,cc}`, `InlineOracle.{h,cc}`, `CsvOracle.{h,cc}`, `SnapshotOracle.{h,cc}` | `compareTyped` + one subclass per expected-form. |
@@ -97,20 +97,20 @@ All files are small and single-purpose by design. If one grows past
 
 ## Where each concern lives
 
-- **"How is CTL type X marshaled?"** → `Marshal.cc`. Every value kind
+- **"How is CTL type X marshaled?"** see `Marshal.cc`. Every value kind
   calls `TypeStorage::set` / `get` with a dotted path. Adding a new
   Value kind means adding a case to `fromTypeStorage` / `toTypeStorage`
   and a `Value::make<Kind>` factory in `CaseModel`.
-- **"Why does tolerance X apply at path Y?"** → `Oracle.cc`. The
+- **"Why does tolerance X apply at path Y?"** see `Oracle.cc`. The
   `resolveAt` helper walks dotted paths into `Tolerance::per_field`.
   `compareFloat` implements the OR semantics over abs/rel/ulp.
-- **"Where does the snapshot three-gate check live?"** →
+- **"Where does the snapshot three-gate check live?"** see
   `SnapshotOracle.cc`. The gate function is `envFlag`; the gate combo
   is evaluated at the top of `check()`.
-- **"How is the schema validated?"** → `YamlLoader.cc`. Any new YAML
+- **"How is the schema validated?"** see `YamlLoader.cc`. Any new YAML
   key should be rejected by default (unknown-key fail) to preserve the
   load-time-is-better-than-runtime invariant.
-- **"Where are testkit::* functions registered?"** → `TestKit.cc`.
+- **"Where are testkit::* functions registered?"** see `TestKit.cc`.
   Each new `testkit::expect_*` is about 20 LoC: a SimdCFunc, a
   FunctionType declaration, and a CTL wrapper appended to
   `kTestKitSource`.
@@ -133,7 +133,7 @@ breaking one, talk to the maintainer first.
    mistake that can be caught from the YAML (unknown key, wrong mode
    combo, malformed tolerance, `ulp:` without `ulp_precision`, etc.)
    must fail in `YamlLoader`, not silently.
-4. **Oracles don't own their tolerance — the runner merges it first.**
+4. **Oracles don't own their tolerance -- the runner merges it first.**
    By the time `compareTyped` is called, `baseTolerance` already has
    `suite.default` merged with `tests[i].tolerance`. Per-field
    sharpening happens inside `compareTyped`. This keeps oracle
@@ -150,7 +150,7 @@ breaking one, talk to the maintainer first.
 ### A new oracle (e.g. `CubeOracle` for .cube LUTs)
 
 1. Add `CubeOracle.{h,cc}` in `lib/`.
-2. Inherit from `Oracle`, implement `check(tc, outputs) -> OracleVerdict`.
+2. Inherit from `Oracle`, implement `check(tc, outputs)` returning `OracleVerdict`.
 3. Call `compareTyped` on each expected/actual pair; don't roll your
    own tolerance logic.
 4. Add `OracleSpec::Kind::Cube` and path field(s) in `CaseModel.h`.
@@ -167,7 +167,7 @@ breaking one, talk to the maintainer first.
 2. Inherit from `Reporter`, implement the three hooks.
 3. Write to a passed-in `std::ostream&`; don't assume stdout.
 4. Extend `cli/main.cc`'s `ReporterKind` enum and CLI flag.
-5. Document in [`CLI.md`](./CLI.md) "Options — `--reporter`".
+5. Document in [`CLI.md`](./CLI.md) "Options -- `--reporter`".
 
 ### A new `testkit::expect_*` (e.g. `expect_near_f3`)
 
@@ -190,16 +190,16 @@ issue before starting.
 
 ### Per-subdirectory breakdown
 
-- `moduletest/CMakeLists.txt` — yaml-cpp resolution (find_package or
-  FetchContent), subdirectory registration, manifest.txt scan →
+- `moduletest/CMakeLists.txt` -- yaml-cpp resolution (find_package or
+  FetchContent), subdirectory registration, manifest.txt scan, then
   `add_test` calls via `ctltest_add_yaml()`.
-- `lib/CMakeLists.txt` — `ctltest_core` static lib. Publicly bumps
+- `lib/CMakeLists.txt` -- `ctltest_core` static lib. Publicly bumps
   `cxx_std_17` so downstream binaries inherit C++17 without affecting
   the rest of CTL (which stays on C++11).
-- `driver/CMakeLists.txt` — `ctltest_run_one` internal binary (not
+- `driver/CMakeLists.txt` -- `ctltest_run_one` internal binary (not
   installed).
-- `cli/CMakeLists.txt` — `ctltest` installed binary.
-- `unittest/CMakeLists.txt` — `ctltest_unit` C++ unit-test binary;
+- `cli/CMakeLists.txt` -- `ctltest` installed binary.
+- `unittest/CMakeLists.txt` -- `ctltest_unit` C++ unit-test binary;
   registers one `ctltest-unit` ctest entry.
 
 ### yaml-cpp
@@ -268,7 +268,7 @@ moduletest/
 Self-tests under `tests/selftest/` are intentionally small and
 fast-running; each exercises one framework feature. Realworld tests
 use absolute paths to external checkouts and are therefore not
-manifest-tracked — they're for local validation of framework changes
+manifest-tracked -- they're for local validation of framework changes
 against production ACES modules.
 
 ## Testing the framework itself
@@ -287,14 +287,14 @@ Three layers:
    with-array, array-of-struct).
 3. **YAML self-tests**: `tests/selftest/*.yaml` run against
    `tests/fixtures/*.ctl`. Every framework feature has at least one
-   case here. These are the authoritative end-to-end tests — if a
+   case here. These are the authoritative end-to-end tests -- if a
    change passes the C++ unit tests but breaks a self-test, the
    feature's contract has regressed.
 
 ## Further reading
 
-- [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) — authoring-side keys and their
+- [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) -- authoring-side keys and their
   meanings.
-- [`CORE_API.md`](./CORE_API.md) — C++ types for embedders.
-- [`TOLERANCE.md`](./TOLERANCE.md) — the compare semantics in detail.
-- [`RELEASE_NOTES.md`](./RELEASE_NOTES.md) — what shipped when.
+- [`CORE_API.md`](./CORE_API.md) -- C++ types for embedders.
+- [`TOLERANCE.md`](./TOLERANCE.md) -- the compare semantics in detail.
+- [`RELEASE_NOTES.md`](./RELEASE_NOTES.md) -- what shipped when.

@@ -252,14 +252,14 @@ Suite loadSuite(const std::string& yamlPath) {
 
     if (root["suite"]) suite.name = root["suite"].as<std::string>();
 
-    // Modules — required.
+    // Modules -- required.
     const YAML::Node mods = require(root, "modules", yamlPath);
     if (!mods.IsSequence() || mods.size() == 0) {
         fail(yamlPath, mods, "'modules' must be a non-empty sequence of strings");
     }
     for (const auto& m : mods) suite.modules.push_back(m.as<std::string>());
 
-    // Module paths — optional; resolved vs suite file dir.
+    // Module paths -- optional; resolved vs suite file dir.
     if (root["module_paths"]) {
         const fs::path base = fs::path(suite.sourcePath).parent_path();
         for (const auto& p : root["module_paths"]) {
@@ -350,7 +350,7 @@ Suite loadSuite(const std::string& yamlPath) {
 
         // In image mode, authors writing `ulp:` must opt into a precision
         // (see ImageSpec::ulpPrecision). Without this, `ulp: 1` is ambiguous
-        // between half and float — the plan resolves this at load time.
+        // between half and float -- the plan resolves this at load time.
         if (tc.mode == TestCase::Mode::Image && tc.tolerance.ulp) {
             auto hasUlpInPerField = [](const Tolerance& t) {
                 for (const auto& kv : t.per_field) if (kv.second.ulp) return true;

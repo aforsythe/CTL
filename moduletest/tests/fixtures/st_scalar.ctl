@@ -71,7 +71,7 @@ to_half(float x)
     return h;
 }
 
-// 1D LUT summing pass — exercises array-of-scalar table marshaling.
+// 1D LUT summing pass -- exercises array-of-scalar table marshaling.
 // size is intentionally fixed at 8 so YAML tests can author the values
 // inline without hitting the large-table threshold.
 float
@@ -83,7 +83,7 @@ lut_sum8(float lut[8])
     return s;
 }
 
-// 3x3 matrix transpose — exercises nested-array (table) marshaling on
+// 3x3 matrix transpose -- exercises nested-array (table) marshaling on
 // both the input and output sides. Requires the v1.1 path-parser fix to
 // address cells like "m/i/j" correctly.
 void
@@ -94,7 +94,7 @@ transpose3x3(float m[3][3], output float out[3][3])
             out[i][j] = m[j][i];
 }
 
-// Struct with a member array — exercises struct -> array -> scalar path.
+// Struct with a member array -- exercises struct to array to scalar path.
 struct Tri
 {
     float v[3];
@@ -118,7 +118,7 @@ tri_sum(Tri t)
     return t.v[0] + t.v[1] + t.v[2];
 }
 
-// Array of structs — exercises array -> struct -> scalar path. Returns
+// Array of structs -- exercises array to struct to scalar path. Returns
 // sum of x across the four points so the oracle can check the round-trip.
 float
 quad_sum_x(Point q[4])

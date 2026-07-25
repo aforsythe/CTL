@@ -53,7 +53,7 @@ jobs:
         working-directory: build
         run: ctest -L ctltest --output-on-failure
 
-      - name: ctltest CLI — JUnit
+      - name: ctltest CLI -- JUnit
         run: |
           ./build/moduletest/cli/ctltest \
             --reporter junit \
@@ -85,7 +85,7 @@ jobs:
         working-directory: build
         run: ctest -L ctltest --output-on-failure
 
-      - name: ctltest CLI — JUnit
+      - name: ctltest CLI -- JUnit
         run: |
           ./build/moduletest/cli/ctltest \
             --reporter junit \

@@ -4,7 +4,7 @@ suite: aces_output_transform
 # Sketch of what a real-world Output Transform author might write against
 # their CTL module. Module names here are illustrative; swap them for your
 # actual namespace::function pairs. No module files are shipped for this
-# example — it's meant to be copy-adapted into a concrete project.
+# example -- it's meant to be copy-adapted into a concrete project.
 #
 # The shape to note:
 #   - suite-level `defaults.tolerance` is your safety net
@@ -43,9 +43,9 @@ tests:
   # ---- 2. Struct input + per-field tolerance ---------------------------
   - id: tonescale_midgray_maps_to_48nits
     description: |
-      Forward tonescale on an 18% gray sample lands at 48 nits (±0.5 nit).
+      Forward tonescale on an 18% gray sample lands at 48 nits (+/-0.5 nit).
       The struct input exercises full-literal binding; the tolerance shows
-      per-field relaxation — L can drift more than `a`/`b`.
+      per-field relaxation -- L can drift more than `a`/`b`.
     function: ACESlib.Tonescales::forward_tonescale
     inputs:
       lab:

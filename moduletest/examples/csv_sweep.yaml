@@ -47,7 +47,7 @@ tests:
     function: mymodule::clamp_ramp
     sweep:
       inputs: csv/inputs.csv
-      strict: false                   # missing columns -> stderr warning
+      strict: false                   # missing columns to stderr warning
     tolerance:
       ulp: 8
     oracle:

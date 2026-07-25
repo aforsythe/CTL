@@ -21,12 +21,12 @@ public:
 // tree in parallel with the `got` Value tree, looking up a per-field
 // tolerance via dotted path, and emitting one Diagnostic per mismatched leaf.
 //
-//   basePath       — caller-supplied root path (typically the output arg name)
-//   baseTolerance  — tolerance in effect at basePath (caller merged in
+//   basePath       -- caller-supplied root path (typically the output arg name)
+//   baseTolerance  -- tolerance in effect at basePath (caller merged in
 //                    suite.default + test.tolerance before descending)
-//   baseSource     — human-readable source of the starting tolerance
+//   baseSource     -- human-readable source of the starting tolerance
 //                    (e.g. "test.tolerance", "suite.default")
-//   out            — diagnostics accumulated here; oracle decides whether to
+//   out            -- diagnostics accumulated here; oracle decides whether to
 //                    cap.
 void compareTyped(const std::string& basePath,
                   const Value& expected,

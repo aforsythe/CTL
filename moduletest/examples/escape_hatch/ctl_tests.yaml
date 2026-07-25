@@ -14,12 +14,12 @@ module_paths:
 
 tests:
   - id: identity_is_identity
-    description: Smoke test — identity returns its input.
+    description: Smoke test -- identity returns its input.
     mode: ctl_native
     function: test_mymodule::test_identity_is_identity
 
   - id: scale_is_linear_in_k
-    description: Property check — mymodule::scale is linear in k over a sweep.
+    description: Property check -- mymodule::scale is linear in k over a sweep.
     mode: ctl_native
     function: test_mymodule::test_scale_is_linear_in_k
 

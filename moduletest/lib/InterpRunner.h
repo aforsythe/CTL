@@ -52,7 +52,7 @@ public:
     // Sweep-mode dispatch. One row per sample. Rows are batched into chunks of
     // at most maxSamples(). Varying args receive per-lane values from rows;
     // uniform args use the first row's value (and must remain identical across
-    // rows — the runner does not currently verify that).
+    // rows -- the runner does not currently verify that).
     //
     // Returns one result map per row, in the same order as `rows`.
     std::vector<std::map<std::string, Value>>

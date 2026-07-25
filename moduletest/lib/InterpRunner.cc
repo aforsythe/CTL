@@ -10,7 +10,7 @@
 namespace ctltest {
 
 struct InterpRunner::Impl {
-    // Always the TestKit-enabled subclass — zero cost for non-ctl_native
+    // Always the TestKit-enabled subclass -- zero cost for non-ctl_native
     // tests, and keeps construction single-path.
     std::unique_ptr<Ctl::SimdInterpreter> interp{newTestInterpreter()};
     std::vector<std::string> savedPaths;

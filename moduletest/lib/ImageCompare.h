@@ -29,7 +29,7 @@ ImageCompareResult compareImages(const Image& expected,
                                  size_t diagCap = 16);
 
 // If compare failed, write the actual image and a diff image next to the
-// reference (e.g. ref.exr -> ref.actual.exr, ref.diff.exr). Channel layout of
+// reference (e.g. ref.exr to ref.actual.exr, ref.diff.exr). Channel layout of
 // the diff: same channel names as the reference, containing (actual-expected).
 void writeFailureArtifacts(const std::string& refPath,
                            const Image& expected,

@@ -68,7 +68,7 @@ void testkitExpectNearFFunc(const Ctl::SimdBoolMask& /*mask*/, Ctl::SimdXContext
 }
 
 //----------------------------------------------------------------------------
-// Interpreter subclass — only exists so we can reach SimdInterpreter's
+// Interpreter subclass -- only exists so we can reach SimdInterpreter's
 // protected symtab() to register our own SimdCFuncs. Nothing else about the
 // interpreter is customized.
 //----------------------------------------------------------------------------
@@ -85,13 +85,13 @@ public:
         Ctl::SimdLContext lcontext(buf, &module, symtab());
         Ctl::SimdStdTypes types(lcontext);
 
-        // void _testkit_expect_true(bool) — uses the prebuilt v_b type.
+        // void _testkit_expect_true(bool) -- uses the prebuilt v_b type.
         Ctl::declareSimdCFunc(symtab(),
                               &testkitExpectTrueFunc,
                               types.funcType_v_b(),
                               "_testkit_expect_true");
 
-        // void _testkit_expect_near_f(float, float, float) — hand-built,
+        // void _testkit_expect_near_f(float, float, float) -- hand-built,
         // there's no matching prefab in SimdStdTypes.
         Ctl::ParamVector p;
         p.push_back(Ctl::Param("actual",   types.type_f(), 0, Ctl::RWA_READ, false));

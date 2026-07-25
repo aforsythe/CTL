@@ -50,17 +50,17 @@ Each element of `tests:` is a mapping with these keys:
 | `mode`           | no       | enum                  | `unit` (default), `sweep`, `image`, `ctl_native`. |
 | `function`       | yes      | string                | `module::name` or bare `name`. The first of `modules:` is used if bare. |
 | `returns_name`   | no       | string (default `return`) | Name used to address the return value in oracles and tolerance paths. |
-| `inputs`         | †        | map<string, Value>    | CTL parameter name → Value. Required in `unit` mode; **forbidden** in `sweep` / `image` / `ctl_native`. |
-| `sweep`          | †        | map                   | Required iff `mode: sweep`. See "Sweep block". |
-| `image`          | †        | map                   | Required iff `mode: image`. See "Image block". |
+| `inputs`         | *        | map<string, Value>    | CTL parameter name to Value. Required in `unit` mode; **forbidden** in `sweep` / `image` / `ctl_native`. |
+| `sweep`          | *        | map                   | Required iff `mode: sweep`. See "Sweep block". |
+| `image`          | *        | map                   | Required iff `mode: image`. See "Image block". |
 | `tolerance`      | no       | map                   | Merged over `defaults.tolerance`. See "Tolerance block". |
-| `oracle`         | ‡        | map                   | Required iff `mode != ctl_native`. Must contain exactly one of `inline`, `csv`, `exr`, `snapshot`. |
+| `oracle`         | **        | map                   | Required iff `mode != ctl_native`. Must contain exactly one of `inline`, `csv`, `exr`, `snapshot`. |
 | `ignore_outputs` | no       | sequence of string    | CTL output-arg names deliberately not checked. |
 | `tags`           | no       | sequence of string    | Free-form labels; surface in reporters. |
 | `known_failure`  | no       | bool (default false)  | If true, a failing outcome becomes pass. A passing outcome becomes `UnexpectedPass` (a loud failure) so silent regressions are caught. |
 
-† Exactly the keys the mode demands, and no others.
-‡ Forbidden in `ctl_native` mode — assertions flow from `testkit::*` inside the CTL body instead.
+* Exactly the keys the mode demands, and no others.
+** Forbidden in `ctl_native` mode -- assertions flow from `testkit::*` inside the CTL body instead.
 
 ## Values & types
 
@@ -86,7 +86,7 @@ v1.1 notes:
   input must appear. Missing or unknown keys fail load. Partial literals
   are planned for a future release.
 - Inline tables above a size threshold must come from a sidecar CSV or
-  EXR via `from_file:` — raw in-YAML tables of hundreds of entries are
+  EXR via `from_file:` -- raw in-YAML tables of hundreds of entries are
   unreadable on diff. (Threshold is currently a soft ~64 elements.)
 - Tolerance keys (`abs`, `rel`, `ulp`) on non-FP leaves (bool / int /
   string) are load-time errors.
@@ -110,12 +110,12 @@ form):
 
 - **Pass rule**: a leaf passes if any of the declared `abs`/`rel`/`ulp`
   bounds is satisfied (OR, not AND).
-- **Merge order**: `defaults.tolerance` → `tests[].tolerance` → matching
+- **Merge order**: `defaults.tolerance` to `tests[].tolerance` to matching
   `per_field` / `per_channel` entry on the current path.
 - **`per_field` paths** use `.` for struct-member descent and `[i]` for
   sequence indexing: `return.v[2]`, `q[0].x`.
 - **`per_channel`** applies only in image mode and is keyed by EXR
-  channel name (`R`, `G`, `B`, `A`, …).
+  channel name (`R`, `G`, `B`, `A`, ...).
 - **Image mode + `ulp:` requires `image.ulp_precision`** (`float`
   currently; `half` reserved; `native` reserved). Omitting it when any
   `ulp:` tolerance is in effect is a load-time error.
@@ -183,11 +183,11 @@ oracle:
 
 Three-gate write protection:
 
-1. **Env**: `CTL_TEST_UPDATE_SNAPSHOTS=1` (or `=force`) — equivalently
+1. **Env**: `CTL_TEST_UPDATE_SNAPSHOTS=1` (or `=force`) -- equivalently
    `ctltest --update-snapshots[=force]`.
-2. **Per-test**: `snapshot.writable: true` — even with the env gate set,
+2. **Per-test**: `snapshot.writable: true` -- even with the env gate set,
    a test without this key never writes.
-3. **First-time record**: `CTL_TEST_ALLOW_NEW_SNAPSHOTS=1` — equivalently
+3. **First-time record**: `CTL_TEST_ALLOW_NEW_SNAPSHOTS=1` -- equivalently
    `ctltest --allow-new-snapshots`. Required only when the snapshot file
    does not yet exist. This prevents CI silently greening a test whose
    expected outputs have never been recorded anywhere.
@@ -201,7 +201,7 @@ mode: sweep
 function: mymodule::clamp_ramp
 sweep:
   inputs: csv/inputs.csv       # path resolved vs YAML dir
-  strict: true                 # default. extra/missing columns fail load. false → stderr warning.
+  strict: true                 # default. extra/missing columns fail load. false to stderr warning.
 oracle:
   csv: csv/expected.csv
 ```
@@ -234,11 +234,11 @@ oracle:
   max_failing_pixels: 2
 ```
 
-- `input_channels` maps CTL input-arg name → EXR source channel name.
-- `output_channels` maps EXR destination channel name → CTL output-arg
+- `input_channels` maps CTL input-arg name to EXR source channel name.
+- `output_channels` maps EXR destination channel name to CTL output-arg
   name.
 - Omitting either map makes the runner try a natural pass-through by
-  shared names (`R` → `R`, `G` → `G`, …).
+  shared names (`R` to `R`, `G` to `G`, ...).
 - `ulp_precision` is currently only `float`. `half` is reserved; `native`
   is reserved. Present-but-unrecognized values fail load.
 
@@ -259,18 +259,18 @@ function: test_mymodule::test_identity_is_identity
 Any filesystem path in the YAML (`module_paths[]`, `sweep.inputs`,
 `oracle.csv`, `oracle.exr`, `oracle.snapshot.path`, `image.input`) is:
 
-- **absolute** if it starts with `/` — used verbatim.
-- **relative** otherwise — resolved against the directory of the YAML
+- **absolute** if it starts with `/` -- used verbatim.
+- **relative** otherwise -- resolved against the directory of the YAML
   file being loaded, then normalized.
 
 ## Complete example
 
 See [`examples/`](../examples/) for worked cases:
 
-- `aces_output_transform.yaml` — all five modes in one file.
-- `csv_sweep.yaml` — parameterized sweep.
-- `snapshot_approval.yaml` — three-gate write protection.
-- `escape_hatch/test_mymodule.ctl` + `ctl_tests.yaml` — CTL-native.
+- `aces_output_transform.yaml` -- all five modes in one file.
+- `csv_sweep.yaml` -- parameterized sweep.
+- `snapshot_approval.yaml` -- three-gate write protection.
+- `escape_hatch/test_mymodule.ctl` + `ctl_tests.yaml` -- CTL-native.
 
 ## Not yet supported (will load-error)
 

@@ -1,4 +1,4 @@
-// ctltest — standalone CLI for ctltest, installed alongside ctlrender.
+// ctltest -- standalone CLI for ctltest, installed alongside ctlrender.
 //
 // Usage:
 //   ctltest [options] <path> [<path> ...]
@@ -143,7 +143,7 @@ std::vector<std::string> expandInputs(const std::vector<std::string>& inputs) {
                  it.increment(ec))
             {
                 if (ec) break;
-                // `snapshots/` holds oracle outputs, not suites — don't descend.
+                // `snapshots/` holds oracle outputs, not suites -- don't descend.
                 if (it->is_directory(ec) && it->path().filename() == "snapshots") {
                     it.disable_recursion_pending();
                     continue;

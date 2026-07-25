@@ -10,7 +10,7 @@
 //   - access to private module helpers not exported from the public API
 //
 // Keep the file basename starting with `test_`. Keep each test function
-// short — if you need to share setup across tests, put helpers in a
+// short -- if you need to share setup across tests, put helpers in a
 // separate CTL module and import it.
 
 ctlversion 1;

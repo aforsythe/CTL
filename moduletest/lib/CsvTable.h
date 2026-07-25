@@ -23,7 +23,7 @@ private:
 // Minimal CSV reader. Supports:
 //   - header row (first non-empty, non-comment line)
 //   - comma-separated fields
-//   - double-quoted fields with escaped quotes ("" -> ")
+//   - double-quoted fields with escaped quotes ("" to ")
 //   - CRLF or LF line endings
 //   - '#' comment lines outside of quoted fields (convenient for fixtures)
 //

@@ -27,7 +27,7 @@ uint32_t ulpDistance(float a, float b) {
     return ab > bb ? ab - bb : bb - ab;
 }
 
-// Resolve per-channel tolerance by falling through base -> per_channel[name].
+// Resolve per-channel tolerance by falling through base to per_channel[name].
 Tolerance resolveChannelTolerance(const Tolerance& base, const std::string& ch) {
     auto it = base.per_channel.find(ch);
     if (it == base.per_channel.end()) return base;
@@ -157,7 +157,7 @@ void writeFailureArtifacts(const std::string& refPath,
                            const Image& expected,
                            const Image& actual)
 {
-    // "<ref>.actual.exr" and "<ref>.diff.exr" — keep sidecars next to the ref.
+    // "<ref>.actual.exr" and "<ref>.diff.exr" -- keep sidecars next to the ref.
     const std::string actualPath = refPath + ".actual.exr";
     const std::string diffPath   = refPath + ".diff.exr";
 

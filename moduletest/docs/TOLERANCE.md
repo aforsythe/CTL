@@ -21,9 +21,9 @@ A `Tolerance` carries up to three optional bounds:
 
 Plus two forms of local override:
 
-- `per_field: { path: { ... } }` — overrides for a leaf keyed by dotted
+- `per_field: { path: { ... } }` -- overrides for a leaf keyed by dotted
   path (e.g. `return.L`, `out[2].b`).
-- `per_channel: { name: { ... } }` — image-mode only, keyed by EXR
+- `per_channel: { name: { ... } }` -- image-mode only, keyed by EXR
   channel name (`R`, `G`, ...).
 
 ## The "pass if any satisfies" rule
@@ -46,7 +46,7 @@ tightest useful bound for typical inputs (`abs` for values near zero,
 values) without authoring three separate tests.
 
 Edge: if no bound is declared at all on a non-zero diff, the leaf
-fails. Bit-identical values (including ±0) short-circuit and pass
+fails. Bit-identical values (including +/-0) short-circuit and pass
 regardless of any bounds.
 
 ## Merge order
@@ -56,8 +56,8 @@ a more specific tolerance overrides broader ones by **field replacement**
 (not field union):
 
 1. `suite.defaults.tolerance` (the base)
-2. `tests[i].tolerance` — `Tolerance::merge(suite_default, test_tol)`
-3. `tests[i].tolerance.per_field[<current path>]` — sharpens further
+2. `tests[i].tolerance` -- `Tolerance::merge(suite_default, test_tol)`
+3. `tests[i].tolerance.per_field[<current path>]` -- sharpens further
 
 Each `merge(base, override)` replaces a field only if the override has
 it set. So:
@@ -108,7 +108,7 @@ A path that doesn't resolve in the expected shape is a load-time error
 (`validateTolerancePaths` check). "Doesn't resolve" covers unknown keys,
 out-of-range indices, and intermediate kind mismatches.
 
-v1.1 made the full multi-segment path work — v1.0 would silently stop
+v1.1 made the full multi-segment path work -- v1.0 would silently stop
 after the first segment (see RELEASE_NOTES "Interpreter fix"). If you
 had to flatten out a `return.v[2]` workaround in v1.0, v1.1 accepts it
 natively.
@@ -134,7 +134,7 @@ future release. It is not in v1.1.
 
 CTL `half` is 16-bit IEEE 754. When an author writes `return: 0.1` in
 YAML and the CTL function returns `half`, the two values cannot be bit-
-identical — `0.1` is not exactly representable in either float or half.
+identical -- `0.1` is not exactly representable in either float or half.
 
 ctltest handles this by **rounding the authored value to nearest-even
 half once on compare**. Against a `Kind::Half` leaf the comparison is:
@@ -148,7 +148,7 @@ compareFloat(evHalf, got.f, tol, ...);
 The diagnostic renders both forms:
 
 - the authored decimal (`0.1`)
-- the rounded-half bit pattern (`0x2e66` → `0.099976`)
+- the rounded-half bit pattern (`0x2e66` becomes `0.099976`)
 
 so authors can reason about sub-ULP drift against the actual
 representable half.
@@ -159,7 +159,7 @@ ULP is computed on `float32`. The formula saturates at `INT64_MAX` for
 NaN / infinity on either side; those are treated as "non-matching"
 unless bit-identical.
 
-`ulp: N` in isolation means "pass if the ULP distance is ≤ N in
+`ulp: N` in isolation means "pass if the ULP distance is <= N in
 float32".
 
 In **image mode** any use of `ulp:` requires an explicit
@@ -169,7 +169,7 @@ In **image mode** any use of `ulp:` requires an explicit
 reserved; `native` is reserved.
 
 For unit / sweep / snapshot oracles the pixel-type question doesn't
-arise — `ulp:` is always float32 ULP.
+arise -- `ulp:` is always float32 ULP.
 
 ## Image mode extras
 
@@ -193,9 +193,9 @@ oracle:
 - `max_failing_pixels` sets a cap on per-pixel, per-channel failures
   before the case is declared failing. Useful for edge-of-gamut
   rasterization tests where 1-2 boundary pixels drift.
-  - `0` (default) — any mismatch fails.
-  - `N > 0` — up to N channel-pixels may fail.
-  - `-1` — diagnostic-only; the case can't fail on pixel drift.
+  - `0` (default) -- any mismatch fails.
+  - `N > 0` -- up to N channel-pixels may fail.
+  - `-1` -- diagnostic-only; the case can't fail on pixel drift.
 
 ## Common idioms
 
@@ -227,7 +227,7 @@ tolerance:
   ulp: 4
 ```
 
-Four float ULPs is ~2.4e-7 near 1.0 — tight enough to catch logic
+Four float ULPs is ~2.4e-7 near 1.0 -- tight enough to catch logic
 errors, loose enough to absorb vendor libm differences on exp/log/pow.
 
 **"Force exact on integer-like outputs in a mostly-FP struct"**:
@@ -236,7 +236,7 @@ errors, loose enough to absorb vendor libm differences on exp/log/pow.
 tolerance:
   abs: 1.0e-6
   per_field:
-    return.count: {}        # empty — no bounds; compare exactly
+    return.count: {}        # empty -- no bounds; compare exactly
 ```
 
 Integer leaves compare exactly regardless of what `abs`/`rel`/`ulp` are
@@ -245,8 +245,8 @@ per_field entry has the same effect.
 
 ## Further reading
 
-- [`lib/Oracle.cc`](../lib/Oracle.cc) — `compareFloat` and `walk` carry
+- [`lib/Oracle.cc`](../lib/Oracle.cc) -- `compareFloat` and `walk` carry
   the canonical semantics; each branch of `Value::Kind` documents what
   it does.
-- [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) "Tolerance block" — the user-
+- [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) "Tolerance block" -- the user-
   facing authoring syntax.

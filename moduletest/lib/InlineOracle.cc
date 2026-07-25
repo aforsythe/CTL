@@ -38,7 +38,7 @@ OracleVerdict InlineOracle::check(const TestCase& tc,
         compareTyped(name, kv.second, it->second, baseTol, baseSource, v.failures);
     }
 
-    // Load-time rule (plan §Ambiguity resolutions #4): every non-defaulted
+    // Load-time rule (plan Sec.Ambiguity resolutions #4): every non-defaulted
     // output must be addressed by inlineExpected OR appear in ignore_outputs.
     // This is the runtime arm of that check.
     for (const auto& kv : outputs) {

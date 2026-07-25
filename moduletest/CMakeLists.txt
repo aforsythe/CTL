@@ -58,7 +58,7 @@ add_subdirectory(unittest)
 
 # Manifest-driven ctest registration.
 # Adding a test = appending one line to tests/manifest.txt (git-tracked).
-# No file(GLOB) at configure time -> no silent reconfiguration surprises.
+# No file(GLOB) at configure time to no silent reconfiguration surprises.
 set(_manifest "${CMAKE_CURRENT_SOURCE_DIR}/tests/manifest.txt")
 if(EXISTS "${_manifest}")
   file(STRINGS "${_manifest}" _manifest_entries)

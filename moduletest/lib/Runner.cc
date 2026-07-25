@@ -32,7 +32,7 @@ std::unique_ptr<Oracle> makeOracle(const TestCase& tc) {
       case OracleSpec::Kind::Csv:
           return std::unique_ptr<Oracle>(new CsvOracle());
       case OracleSpec::Kind::Exr:
-          // Image mode bypasses the single-output Oracle interface — it has
+          // Image mode bypasses the single-output Oracle interface -- it has
           // its own pipeline via runImage(). Caller should never hit this.
           return std::unique_ptr<Oracle>();
       case OracleSpec::Kind::Snapshot:
@@ -119,7 +119,7 @@ OracleVerdict runSweep(const TestCase& tc, InterpRunner& interp) {
 
     // Strict column-shape check. Every input column must name an input arg;
     // every expected column must name an output arg or the return alias.
-    // strict=true -> Diagnostics; strict=false -> stderr warnings, keep going.
+    // strict=true to Diagnostics; strict=false to stderr warnings, keep going.
     {
         std::vector<std::string> extraInputs;
         std::vector<std::string> missingInputs;
@@ -311,7 +311,7 @@ OracleVerdict runImage(const TestCase& tc, InterpRunner& interp) {
         return v;
     }
 
-    // 3. Resolve channel maps. Empty map → natural pass-through where CTL
+    // 3. Resolve channel maps. Empty map to natural pass-through where CTL
     //    arg names coincide with EXR channel names.
     std::map<std::string, std::string> inMap  = tc.image.inputChannelMap;
     std::map<std::string, std::string> outMap = tc.image.outputChannelMap;
@@ -448,7 +448,7 @@ OracleVerdict runCtlNative(const TestCase& tc, InterpRunner& interp) {
         interp.runCtlNative(tc.functionName);
 
     if (asserts.empty()) {
-        // An empty test is suspicious — the author probably forgot to wire
+        // An empty test is suspicious -- the author probably forgot to wire
         // testkit calls into the function body. Surface it as a failure so
         // it can't silently green.
         Diagnostic d;

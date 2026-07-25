@@ -85,11 +85,11 @@ Expected output:
 
 ```
 suite: mymodule (1 cases)
-  ✔ scale_by_two
+  [x] scale_by_two
 1 passed, 0 failed, 0 errored
 ```
 
-**In a ctest-driven build** — add the suite path to
+**In a ctest-driven build** -- add the suite path to
 `moduletest/tests/manifest.txt` and regenerate:
 
 ```
@@ -104,7 +104,7 @@ Each manifest entry becomes one `ctltest::<path>` test.
 Edit `oracle.inline.return` to `3.1` and rerun. Console output:
 
 ```
-✘ scale_by_two
+[ ] scale_by_two
     return: expected 3.1, got 3
       abs_err = 0.1
       tolerance = abs:1e-06 (suite.default)

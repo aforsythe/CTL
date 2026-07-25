@@ -2,8 +2,8 @@
 
 `ctltest_core` is the static library that powers both the in-tree
 `ctltest_run_one` driver (ctest's entry point) and the installed
-`ctltest` CLI. Downstream projects that want to embed the runner — a
-custom front-end, an IDE integration, an in-process CI harness — link
+`ctltest` CLI. Downstream projects that want to embed the runner -- a
+custom front-end, an IDE integration, an in-process CI harness -- link
 against this library.
 
 This document is a reference, not a tutorial. For an overview of how
@@ -24,7 +24,7 @@ target_link_libraries(your_target PRIVATE ctltest_core)
 `ctltest_core` propagates `IlmCtl`, `IlmCtlSimd`, `IlmCtlMath`, and (via
 the OpenEXR targets when present) Imath / Half / Iex / IlmImf as
 PUBLIC dependencies, so consumers don't need to restate them. The
-target also sets `cxx_std_17` publicly — the rest of CTL is C++11, but
+target also sets `cxx_std_17` publicly -- the rest of CTL is C++11, but
 the `moduletest/` sub-tree scopes C++17 to itself. yaml-cpp is a
 PRIVATE dependency and does not leak.
 
@@ -52,7 +52,7 @@ PRIVATE dependency and does not leak.
 | [`Runner.h`](../lib/Runner.h)                        | `runSuite`, `RunCounts` |
 | [`TestKit.h`](../lib/TestKit.h)                      | `newTestInterpreter`, `TestAssertion`, `drainAssertions`, `clearAssertions` |
 
-## Domain model — `CaseModel.h`
+## Domain model -- `CaseModel.h`
 
 ### `Value`
 
@@ -83,7 +83,7 @@ struct Value {
 - `Half` is a distinct kind from `Float` so the oracle rounds to
   nearest-even half before compare and renders the half bit pattern in
   diagnostics (see [`TOLERANCE.md`](./TOLERANCE.md) "Half precision").
-- In numeric paths `Half` is treated like `Float` — any compare that
+- In numeric paths `Half` is treated like `Float` -- any compare that
   accepts `Float` accepts `Half`.
 
 ### `Tolerance`
@@ -135,11 +135,11 @@ relative to the suite YAML's directory.
 
 ### `TestCase` / `Suite`
 
-See [`CaseModel.h`](../lib/CaseModel.h) for the full definitions —
+See [`CaseModel.h`](../lib/CaseModel.h) for the full definitions --
 fields line up one-to-one with YAML keys documented in
 [`YAML_SCHEMA.md`](./YAML_SCHEMA.md).
 
-## Parse — `YamlLoader.h`
+## Parse -- `YamlLoader.h`
 
 ```cpp
 Suite loadSuite(const std::string& yamlPath);
@@ -168,7 +168,7 @@ it requires the interpreter): tolerance-path resolution against the
 actual CTL signature. That's done by
 `Oracle.h::validateTolerancePaths` once outputs are known.
 
-## Interpreter — `InterpRunner.h`
+## Interpreter -- `InterpRunner.h`
 
 ```cpp
 class InterpRunner {
@@ -205,7 +205,7 @@ public:
   that holds a process-wide symbol table; keeping runners per-case
   avoids cross-case symbol collisions. (`ctlrender` does the same via
   its `InterpreterCache`.)
-- Not copyable or movable — hold by reference or `unique_ptr`. If you
+- Not copyable or movable -- hold by reference or `unique_ptr`. If you
   need a factory, write a function that takes a reference and
   configures it in place.
 
@@ -215,9 +215,9 @@ public:
 **`setModulePaths` is process-global** via
 `Ctl::Interpreter::setModulePaths`. The runner restores the previous
 paths on destruction. If you construct two runners concurrently, paths
-will interleave — synchronize externally.
+will interleave -- synchronize externally.
 
-## Marshal — `Marshal.h`
+## Marshal -- `Marshal.h`
 
 Thin, deliberately small layer between `Value` and `Ctl::FunctionArg`.
 Uses `TypeStorage::set`/`get` (from `CtlTypeStorage.h`) exclusively, so
@@ -247,7 +247,7 @@ but those are interpreter-internal tests. The ctltest boundary is
 `TypeStorage` only, and keeping it that way is how the framework stays
 correct across struct/array/nested composites.
 
-## Oracles — `Oracle.h` + subclasses
+## Oracles -- `Oracle.h` + subclasses
 
 ```cpp
 class Oracle {
@@ -282,10 +282,10 @@ void compareTyped(const std::string&     basePath,
 
 `validateTolerancePaths(basePath, tol, shape, out)` sanity-checks that
 every `per_field` key resolves to a leaf of the right kind in `shape`.
-Call this once the expected shape is known — usually right after
+Call this once the expected shape is known -- usually right after
 building the oracle for a test.
 
-## Reporters — `Reporter.h` + subclasses
+## Reporters -- `Reporter.h` + subclasses
 
 ```cpp
 class Reporter {
@@ -304,7 +304,7 @@ flush format-specific tail content (plan line, closing XML).
 To add a format: implement this interface, link to `ctltest_core`, and
 your caller can hand an instance to `runSuite`.
 
-## Runner — `Runner.h`
+## Runner -- `Runner.h`
 
 ```cpp
 struct RunCounts {
@@ -318,16 +318,16 @@ RunCounts runSuite(const Suite& suite, Reporter& reporter);
 
 Dispatches every case in the suite, calling the reporter's three hooks
 in order. `nonPassing() == 0` is the canonical "did this run pass"
-check — that's what the CLI uses to decide its exit code.
+check -- that's what the CLI uses to decide its exit code.
 
-## Snapshot format — `ValueIO.h`
+## Snapshot format -- `ValueIO.h`
 
 Snapshot files are YAML maps of output-arg-name to Value. Use
 `saveValueMap` / `loadValueMap` if you're writing a non-snapshot tool
 that wants to read them. Format:
 
 ```yaml
-# ctltest snapshot — edit with care; regenerate with CTL_TEST_UPDATE_SNAPSHOTS=1
+# ctltest snapshot -- edit with care; regenerate with CTL_TEST_UPDATE_SNAPSHOTS=1
 aOut: "1"
 bOut: "0.16878429055213928"
 gOut: "0"
@@ -335,10 +335,10 @@ rOut: "0.99727851152420044"
 ```
 
 Numbers are stringified at full round-trip precision. The "edit with
-care" banner is intentional — the file is meant to be regenerated, not
+care" banner is intentional -- the file is meant to be regenerated, not
 hand-edited.
 
-## TestKit / ctl_native — `TestKit.h`
+## TestKit / ctl_native -- `TestKit.h`
 
 ```cpp
 Ctl::SimdInterpreter* newTestInterpreter();  // caller owns
@@ -365,7 +365,7 @@ std::vector<TestAssertion> asserts = drainAssertions();
 
 `newTestInterpreter()` returns a `Ctl::SimdInterpreter` subclass with
 `testkit::expect_*` SimdCFuncs registered and the testkit CTL module
-preloaded. `InterpRunner` uses this factory internally — you rarely
+preloaded. `InterpRunner` uses this factory internally -- you rarely
 need to call it from client code.
 
 The assertion buffer is `thread_local`. If you spin up your own
@@ -398,7 +398,7 @@ Same as `ctltest_run_one`, minus the CLI argument handling.
   only additions since v0.1.
 - **`Oracle` and `Reporter` interfaces**: stable. Adding a new concrete
   oracle / reporter type is the non-breaking path.
-- **`TestKit`**: expanding — `expect_near_*` variants planned. Existing
+- **`TestKit`**: expanding -- `expect_near_*` variants planned. Existing
   `TestAssertion::Kind` values won't be renumbered.
 - **Snapshot YAML format**: stable inside v1. The banner comment is
   informative; tooling should read the data, not parse the banner.

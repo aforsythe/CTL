@@ -131,7 +131,7 @@ void saveValueMap(const std::string& path,
     {
         std::ofstream os(tmp.string());
         if (!os) throw ValueIOError("cannot open snapshot tmp file '" + tmp.string() + "'");
-        os << "# ctltest snapshot — edit with care; regenerate with CTL_TEST_UPDATE_SNAPSHOTS=1\n";
+        os << "# ctltest snapshot -- edit with care; regenerate with CTL_TEST_UPDATE_SNAPSHOTS=1\n";
         os << e.c_str() << "\n";
         if (!os.good()) {
             os.close();
@@ -144,7 +144,7 @@ void saveValueMap(const std::string& path,
     fs::rename(tmp, target, ec);
     if (ec) {
         std::remove(tmp.string().c_str());
-        throw ValueIOError("rename(" + tmp.string() + " -> " + target.string() + ") failed: " + ec.message());
+        throw ValueIOError("rename(" + tmp.string() + " to " + target.string() + ") failed: " + ec.message());
     }
 }
 

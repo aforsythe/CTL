@@ -92,7 +92,7 @@ void setScalar(Ctl::TypeStorage& ts, const Ctl::DataTypePtr& dt,
 void setAggregate(Ctl::TypeStorage& ts, const Ctl::DataTypePtr& dt,
                   const Value& v, const std::string& path, size_t lane)
 {
-    // BoolType in this codebase reports IntTypeEnum from cDataType() — detect
+    // BoolType in this codebase reports IntTypeEnum from cDataType() -- detect
     // it via RTTI so we set with the right overload.
     if (Ctl::BoolTypePtr bp = dt.cast<Ctl::BoolType>()) {
         (void)bp;
@@ -128,7 +128,7 @@ void setAggregate(Ctl::TypeStorage& ts, const Ctl::DataTypePtr& dt,
           if (v.kind != Value::Kind::Map)
               throw MarshalError("expected map for struct at '" + path + "'");
           const auto& members = st->members();
-          // v1 rule: require full literal. Missing/extra keys -> error.
+          // v1 rule: require full literal. Missing/extra keys to error.
           for (const auto& m : members) {
               auto it = v.map.find(m.name);
               if (it == v.map.end())

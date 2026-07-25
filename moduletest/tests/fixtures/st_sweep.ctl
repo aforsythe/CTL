@@ -1,5 +1,5 @@
 // Fixture module for ctltest v0.2 sweep self-tests.
-// Small scalar signatures — one-per-row batched through runBatch.
+// Small scalar signatures -- one-per-row batched through runBatch.
 
 namespace st_sweep
 {

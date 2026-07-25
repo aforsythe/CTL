@@ -32,7 +32,7 @@ ConsoleReporter::ConsoleReporter(std::ostream& os, bool color)
 void ConsoleReporter::onSuiteBegin(const std::string& suiteName, size_t totalCases) {
     if (_color) _os << kBold;
     _os << "ctltest: " << (suiteName.empty() ? "(unnamed suite)" : suiteName)
-        << " — " << totalCases << " case" << (totalCases == 1 ? "" : "s");
+        << " -- " << totalCases << " case" << (totalCases == 1 ? "" : "s");
     if (_color) _os << kReset;
     _os << "\n";
 }
@@ -56,10 +56,10 @@ void ConsoleReporter::onCaseResult(const CaseResult& r) {
     _os << " " << (r.testcase ? r.testcase->id : std::string("<no id>"));
 
     if (r.testcase && !r.testcase->description.empty()) {
-        _os << " — " << r.testcase->description;
+        _os << " -- " << r.testcase->description;
     }
     if (_color) _os << kDim;
-    _os << "  (" << r.duration.count() << " µs)";
+    _os << "  (" << r.duration.count() << " us)";
     if (_color) _os << kReset;
     _os << "\n";
 

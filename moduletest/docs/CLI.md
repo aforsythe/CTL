@@ -17,7 +17,7 @@ ctltest [options] <path> [<path> ...]
 
 Each `<path>` is either a YAML suite file or a directory. Directories
 are walked for `*.yaml` / `*.yml` (recursively). A subdirectory named
-`snapshots` is skipped — snapshot files look like suite files but aren't.
+`snapshots` is skipped -- snapshot files look like suite files but aren't.
 
 Results from multiple paths are aggregated into one reporter stream.
 
@@ -37,12 +37,12 @@ runtime exceptions.
 
 Output format. Default: `console`.
 
-- `console` — human-readable, colorized when stdout is a TTY. Multi-line
+- `console` -- human-readable, colorized when stdout is a TTY. Multi-line
   diagnostics include the dotted path, expected/got text, observed
   errors, and which tolerance was in effect.
-- `tap` — TAP v14 stream. One `ok` / `not ok` line per case, with YAML
+- `tap` -- TAP v14 stream. One `ok` / `not ok` line per case, with YAML
   diagnostic blocks for failures. Ends with a `1..N` plan line.
-- `junit` — single JUnit XML document covering all suites. Emitted
+- `junit` -- single JUnit XML document covering all suites. Emitted
   after all cases run (the whole document is one `finalize()` call).
   Pair with `--output` to capture directly to a file.
 
@@ -100,7 +100,7 @@ Print usage to stderr and exit 0.
 
 The CLI flags above are just shortcuts for setting these. Invoking
 `ctltest` from a shell where the vars are already set has the same
-effect as the flags — this is intentional so CI can opt whole jobs into
+effect as the flags -- this is intentional so CI can opt whole jobs into
 a mode via env.
 
 ## Typical invocations
@@ -145,8 +145,8 @@ binaries share `ctltest_core`.
 
 Labels:
 
-- `ctltest` — the YAML-driven self-test and registered-suite cases.
-- `ctltest-unit` — the C++ unit-test binary (`ctltest_unit`) covering
+- `ctltest` -- the YAML-driven self-test and registered-suite cases.
+- `ctltest-unit` -- the C++ unit-test binary (`ctltest_unit`) covering
   ctltest_core's own public API.
 
 ```
@@ -159,7 +159,7 @@ ctest --test-dir build -L 'ctltest|ctltest-unit'   # everything ctltest owns
 A failing scalar diff looks like:
 
 ```
-  ✘ scale_by_two
+  [ ] scale_by_two
       return: expected 3.1, got 3
         abs_err = 0.1
         tolerance = abs:1e-06 (suite.default)
@@ -167,20 +167,20 @@ A failing scalar diff looks like:
 
 Fields:
 
-- **path** — dotted / bracketed path into the output tree. `return`,
+- **path** -- dotted / bracketed path into the output tree. `return`,
   `out.r`, `out[2].g`. See [`YAML_SCHEMA.md`](./YAML_SCHEMA.md)
   "Tolerance block".
-- **expected / got** — human text from `Value::describe()`. For halves,
+- **expected / got** -- human text from `Value::describe()`. For halves,
   both the authored decimal and the 16-bit pattern appear.
-- **abs_err / rel_err / ulp_err** — all three are computed and reported.
+- **abs_err / rel_err / ulp_err** -- all three are computed and reported.
   The one your tolerance used is highlighted.
-- **tolerance** — the effective bound plus its source
+- **tolerance** -- the effective bound plus its source
   (`suite.default` / `test.tolerance` /
   `test.tolerance.per_field[out.b]`).
 
 ## Known limitations
 
-- No glob in `--output` — a single file or stdout.
+- No glob in `--output` -- a single file or stdout.
 - No parallel-case execution inside a suite yet; each case sets up its
   own interpreter and runs serially.
 - No per-case timeout; a runaway CTL function stalls the run.

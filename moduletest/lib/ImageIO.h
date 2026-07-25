@@ -13,7 +13,7 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-// Minimal float32 planar image: one named channel -> width*height floats.
+// Minimal float32 planar image: one named channel to width*height floats.
 // Pixel at (x, y) in channel c is `channels[c][y*width + x]`.
 //
 // Derived from the read path in ctlrender/exr_file.cc, intentionally

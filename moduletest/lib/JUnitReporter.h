@@ -10,7 +10,7 @@
 
 namespace ctltest {
 
-// JUnit XML reporter — Ant/Surefire-compatible schema.
+// JUnit XML reporter -- Ant/Surefire-compatible schema.
 //
 // Emits a single <testsuites> document summing all suites seen during the
 // run. Each onSuiteBegin starts a new <testsuite>; onCaseResult fills in

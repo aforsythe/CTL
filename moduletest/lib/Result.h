@@ -10,7 +10,7 @@
 
 namespace ctltest {
 
-// Diagnostic — one mismatch, located by dotted path into the output tree.
+// Diagnostic -- one mismatch, located by dotted path into the output tree.
 struct Diagnostic {
     std::string path;           // "return", "out.r", "out[2]"
     std::string expectedText;
@@ -22,14 +22,14 @@ struct Diagnostic {
     std::string toleranceSource; // human text: "suite.default" / "test.tolerance" / "test.tolerance.per_field[out.b]"
 };
 
-// OracleVerdict — the output of Oracle::check().
+// OracleVerdict -- the output of Oracle::check().
 struct OracleVerdict {
     bool passed = false;
     std::vector<Diagnostic> failures;   // first K; bounded by reporter
     std::string summary;                // image mode: "147/1048576 pixels failed"
 };
 
-// CaseResult — full record for one TestCase after execution.
+// CaseResult -- full record for one TestCase after execution.
 struct CaseResult {
     enum class Outcome { Pass, Fail, Error, Skipped, UnexpectedPass };
 

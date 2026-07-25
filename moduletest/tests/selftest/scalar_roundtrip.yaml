@@ -155,7 +155,7 @@ tests:
   - id: struct_with_array_member_consumed
     description: |
       Consume a struct containing an array member. Exercises the input-side
-      struct -> array -> scalar bind.
+      struct to array to scalar bind.
     function: st_scalar::tri_sum
     inputs:
       t:
@@ -169,7 +169,7 @@ tests:
 
   - id: array_of_struct
     description: |
-      Fixed array of struct (Point[4]). Exercises array -> struct ->
+      Fixed array of struct (Point[4]). Exercises array to struct ->
       scalar marshaling on the input side.
     function: st_scalar::quad_sum_x
     inputs:

@@ -1,7 +1,7 @@
 # `testkit.ctl` API reference
 
 `testkit` is the CTL-side surface of ctltest's escape hatch. Use it when
-YAML can't express what you need — loops, property checks, assertions on
+YAML can't express what you need -- loops, property checks, assertions on
 intermediate values inside a multi-stage computation, access to private
 module helpers not exposed in the public API.
 
@@ -55,7 +55,7 @@ tests:
     function: test_mymodule::test_identity_is_identity
 ```
 
-`ctl_native` mode forbids `inputs:` and `oracle:` — the body is the
+`ctl_native` mode forbids `inputs:` and `oracle:` -- the body is the
 oracle.
 
 ## Imported symbols
@@ -66,7 +66,7 @@ the `testkit::` namespace:
 ### `testkit::expect_near_f(float actual, float expected, float abs_tol)`
 
 Record an assertion that `|actual - expected| <= abs_tol`. Always
-records — a passing assertion is captured so reporters can show what
+records -- a passing assertion is captured so reporters can show what
 ran, not just what failed.
 
 ```ctl
@@ -88,7 +88,7 @@ testkit::expect_true(linear[0] < 0.04);
 - The function must live in a CTL module, take zero arguments, and
   return `void`.
 - The function name must start with `test_`.
-- The function must be invocable at uniform lane count 1 — CTL-native
+- The function must be invocable at uniform lane count 1 -- CTL-native
   tests run at `callFunction(1)` with no input arguments.
 
 `testkit::*` calls inside helper functions are fine; assertions get
@@ -101,7 +101,7 @@ drained after `callFunction(1)` returns).
 Each call goes through:
 
 1. The framework instantiates an interpreter via `newTestInterpreter()`.
-2. The testkit CTL module source is preloaded inline — you don't need a
+2. The testkit CTL module source is preloaded inline -- you don't need a
    `module_paths:` entry for testkit itself.
 3. The testkit functions dispatch to SimdCFuncs which append structured
    records to a per-thread buffer.
@@ -128,7 +128,7 @@ but not shipped:
 - Vector / struct assertion variants: `expect_near_f3`, `expect_near_struct`.
   Use a helper that calls `expect_near_f` component-wise for now.
 - `fail(string)` / `skip(string)` / `set_tolerance(float)` /
-  `description(string)` / `tag(string)`. The plan's full surface —
+  `description(string)` / `tag(string)`. The plan's full surface --
   work item tracked.
 - ULP-based scalar assertions: `expect_near_ulp_f`. Use abs for now and
   check the reporter output to see the observed ULP error.
@@ -143,7 +143,7 @@ wrapper appended to the embedded testkit module source.
 - **The file basename matters.** A file named `my_checks.ctl` will not
   be picked up; it must start with `test_`.
 - **Function name matters too.** A function named `check_linearity()`
-  in a `test_*.ctl` file is not a test — it's just a helper.
+  in a `test_*.ctl` file is not a test -- it's just a helper.
 - **No arguments.** A test function that takes arguments will fail
   dispatch. If you need parameterization, use a YAML `sweep` oracle, or
   author a loop in the body with `for`.
@@ -151,15 +151,15 @@ wrapper appended to the embedded testkit module source.
   behavior; assertions read lane 0 only. Exercise varying dispatch
   through sweep or image mode instead.
 - **Thread locality.** The assertion buffer is per-thread. Don't spawn
-  CTL threads inside a test — all reachable code runs on the thread
+  CTL threads inside a test -- all reachable code runs on the thread
   that called `callFunction(1)`.
 
 ## Further reading
 
 - [`examples/escape_hatch/test_mymodule.ctl`](../examples/escape_hatch/test_mymodule.ctl)
-  — a worked example showing the three idioms (roundtrip, property
+  -- a worked example showing the three idioms (roundtrip, property
   check, intermediate-value assertion).
-- [`lib/TestKit.cc`](../lib/TestKit.cc) — the host-side registrar.
+- [`lib/TestKit.cc`](../lib/TestKit.cc) -- the host-side registrar.
   Contains the embedded testkit CTL source at `kTestKitSource`.
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — how the escape hatch slots
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) -- how the escape hatch slots
   into the framework's overall shape.

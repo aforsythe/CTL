@@ -32,7 +32,7 @@ std::string leafText(const Value& v) {
 }
 
 // Signed ULP distance between two floats, saturating at INT64_MAX. NaN/inf
-// compare as non-matching -> INT64_MAX.
+// compare as non-matching to INT64_MAX.
 int64_t ulpsBetween(float a, float b) {
     if (std::isnan(a) || std::isnan(b) || std::isinf(a) || std::isinf(b)) {
         if (a == b) return 0;

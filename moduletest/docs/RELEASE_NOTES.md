@@ -11,10 +11,10 @@ time details (CMake options, dependencies, layout) see the top-level
 
 ---
 
-## v1.1 — nested aggregates end-to-end
+## v1.1 -- nested aggregates end-to-end
 
 v1.1 is the first release in which ctltest marshals the full CTL type
-system at every boundary — no more flat-type restriction, no more dropping
+system at every boundary -- no more flat-type restriction, no more dropping
 per-field tolerances at array-of-struct leaves. The release is driven by a
 single fix in the interpreter's path parser, plus the library changes that
 fall out of it.
@@ -31,7 +31,7 @@ fall out of it.
   interpreter's path parser silently stopped after the first segment, which
   is why the flat-type restriction existed.
 - **C++ unit test binary.** A new `ctltest_unit` binary runs twelve test
-  sections against ctltest_core's public API — Value, Tolerance::merge,
+  sections against ctltest_core's public API -- Value, Tolerance::merge,
   compareTyped, validateTolerancePaths, CsvTable, YamlLoader, and six
   Marshal round-trip suites (scalar, flat array, struct, nested array,
   struct-with-array, array-of-struct). Registered under a new `ctltest-unit`
@@ -44,28 +44,28 @@ fall out of it.
   test is effective in both Debug and Release builds (under `NDEBUG`,
   `assert()` compiles out).
 - **Documentation set.** Seven reference docs now ship under `docs/`:
-  - [`QUICKSTART.md`](./QUICKSTART.md) — five-minute first test.
-  - [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) — every key, every mode, every
+  - [`QUICKSTART.md`](./QUICKSTART.md) -- five-minute first test.
+  - [`YAML_SCHEMA.md`](./YAML_SCHEMA.md) -- every key, every mode, every
     resolved path rule.
-  - [`CLI.md`](./CLI.md) — `ctltest` flags, env vars, exit codes,
+  - [`CLI.md`](./CLI.md) -- `ctltest` flags, env vars, exit codes,
     interaction with ctest.
-  - [`TESTKIT_API.md`](./TESTKIT_API.md) — CTL-native escape hatch:
+  - [`TESTKIT_API.md`](./TESTKIT_API.md) -- CTL-native escape hatch:
     file/function discovery, `testkit::expect_*` surface, runtime
     mechanism.
-  - [`CORE_API.md`](./CORE_API.md) — C++ `ctltest_core` API for
+  - [`CORE_API.md`](./CORE_API.md) -- C++ `ctltest_core` API for
     downstream embedders.
-  - [`ARCHITECTURE.md`](./ARCHITECTURE.md) — contributor-facing
+  - [`ARCHITECTURE.md`](./ARCHITECTURE.md) -- contributor-facing
     component map, invariants, and how to add an oracle / reporter /
     value kind.
-  - [`TOLERANCE.md`](./TOLERANCE.md) — merge order, pass-if-any
+  - [`TOLERANCE.md`](./TOLERANCE.md) -- merge order, pass-if-any
     semantics, half rounding, ULP precision, image-mode extras.
 
-### Interpreter fix — `Ctl::Type::childElementV`
+### Interpreter fix -- `Ctl::Type::childElementV`
 
 v1.0's flat-type restriction was a workaround for an off-by-one in
 `lib/IlmCtl/CtlType.cpp` when parsing slash-separated paths. Given
 `"i/j"`, the parser extracted the leaf `"j"` but passed `"i/j"` (minus one
-character: `"i/"` → `"i"` after a stray adjustment) as the head segment,
+character: `"i/"` becomes `"i"` after a stray adjustment) as the head segment,
 producing a malformed recursion that drove `CtlExc::_explain` into stack
 overflow on certain inputs.
 
@@ -92,9 +92,9 @@ emitted a clear load-time error (`"only flat types supported"`) for any
 test that now works under v1.1. If your suite passed on v1.0, it passes on
 v1.1.
 
-If you had workarounds for the flat-type restriction — flattening a
+If you had workarounds for the flat-type restriction -- flattening a
 `float[3][3]` into `float[9]` and reshaping inside the CTL function, say,
-or splitting a struct into N scalar outputs — you can now author the
+or splitting a struct into N scalar outputs -- you can now author the
 natural shape directly:
 
 ```yaml
@@ -146,7 +146,7 @@ binary, 12 inner sections). The IlmCtl path-parser test is part of
 
 ---
 
-## v1.0 — load-time hardening
+## v1.0 -- load-time hardening
 
 v1.0 was a consolidation release. No new modes were added; instead the
 load-time validation surface was tightened so that authoring mistakes
@@ -179,11 +179,11 @@ diagnostics.
 
 ---
 
-## v0.5 — snapshot oracle and CTL-native escape hatch
+## v0.5 -- snapshot oracle and CTL-native escape hatch
 
 ### Highlights
 
-- **`SnapshotOracle`** — approval-style testing with three-gate write
+- **`SnapshotOracle`** -- approval-style testing with three-gate write
   protection:
   1. `CTL_TEST_UPDATE_SNAPSHOTS=1` in the environment, or
      `--update-snapshots` on the CLI
@@ -195,13 +195,13 @@ diagnostics.
   CI can't silently green on "no snapshot yet". Subsequent runs read the
   snapshot as the expected value and diff normally.
 
-- **CTL-native escape hatch (`testkit`)** — for tests that need loops,
+- **CTL-native escape hatch (`testkit`)** -- for tests that need loops,
   random sampling, property checks, or access to private helpers. Authors
   write `test_<name>.ctl` containing zero-arg `void` functions whose names
   start with `test_`. The framework registers `testkit::expect_*`,
   `testkit::fail`, `testkit::skip`, `testkit::tag`,
   `testkit::set_tolerance`, `testkit::description` as SimdCFuncs that
-  append structured records to a per-thread `TestRecorder` — no stdout
+  append structured records to a per-thread `TestRecorder` -- no stdout
   scraping, unlike the prior community attempt.
 
 - CLI walker skips `snapshots/` subdirectories so `ctltest path/to/suite/`
@@ -209,16 +209,16 @@ diagnostics.
 
 ---
 
-## v0.4 — CLI and structured output
+## v0.4 -- CLI and structured output
 
 ### Highlights
 
-- **`ctltest` CLI** — standalone binary installed alongside `ctlrender`.
+- **`ctltest` CLI** -- standalone binary installed alongside `ctlrender`.
   Walks directories of YAML suites, filters by glob, selects a reporter at
-  flag time. Thin wrapper around `ctltest_core::Runner` — 100% of its
+  flag time. Thin wrapper around `ctltest_core::Runner` -- 100% of its
   execution path is shared with the in-tree `ctltest_run_one` driver.
-- **TAP v14 reporter** — standard streaming format for CI integration.
-- **JUnit XML reporter** — consumed by Jenkins, GitLab, GitHub Actions.
+- **TAP v14 reporter** -- standard streaming format for CI integration.
+- **JUnit XML reporter** -- consumed by Jenkins, GitLab, GitHub Actions.
   Each CTL test becomes a `<testcase>`, each diagnostic a `<failure>`
   entry with structured `expected`/`got`/`abs_err`/`rel_err`/`ulp_err`
   fields.
@@ -240,21 +240,21 @@ ctltest --reporter junit --output results.xml tests/
 
 ---
 
-## v0.3 — image conformance
+## v0.3 -- image conformance
 
 ### Highlights
 
-- **Image mode** — reference-EXR conformance tests. Source EXR channels
+- **Image mode** -- reference-EXR conformance tests. Source EXR channels
   are bound to CTL input args (via `input_channel_map` or a natural
   `{R,G,B,A}` pass-through), the function runs per-pixel with batching up
   to `SimdInterpreter::maxSamples()` lanes, and the resulting image is
   diffed against the reference EXR by `ExrOracle`.
-- **Per-channel tolerance** — `per_channel: { R: {...}, G: {...} }`.
-- **`max_failing_pixels`** — cap on per-pixel, per-channel failures before
+- **Per-channel tolerance** -- `per_channel: { R: {...}, G: {...} }`.
+- **`max_failing_pixels`** -- cap on per-pixel, per-channel failures before
   a case fails. 0 means "any mismatch fails"; negative means "no cap".
 - On failure the CLI can write `<snap>.actual.exr` and `<snap>.diff.exr`
   next to the reference so the author can open both in the same viewer.
-- `ImageIO` ships a minimal EXR read path copied from `ctlrender` — the
+- `ImageIO` ships a minimal EXR read path copied from `ctlrender` -- the
   full refactor of `ctlrender/exr_file.{cc,hh}` into a shared module is
   deferred.
 
@@ -267,20 +267,20 @@ explicit `ulp_precision` is a load-time error.
 
 ---
 
-## v0.2 — sweeps
+## v0.2 -- sweeps
 
 ### Highlights
 
-- **Sweep mode** — one YAML test parameterizes over the rows of a CSV.
+- **Sweep mode** -- one YAML test parameterizes over the rows of a CSV.
   The runner batches rows into `maxSamples()`-lane varying calls, so a
   1000-row sweep turns into a dozen CTL invocations rather than a
   thousand.
-- **`CsvTable` / `CsvOracle`** — the CSV reader supports comma-separated
+- **`CsvTable` / `CsvOracle`** -- the CSV reader supports comma-separated
   fields, double-quoted fields with `""` escapes, CRLF/LF line endings,
   and `#` comment lines. Column shape is strict by default (extra/missing
   columns fail load) with an opt-out `strict: false` that downgrades to
   warning.
-- **Expected-outputs CSV** — sweep tests can pair an `inputs_csv` with an
+- **Expected-outputs CSV** -- sweep tests can pair an `inputs_csv` with an
   `expected_csv`. Column names match CTL output args and the `returnsName`
   alias.
 
@@ -296,7 +296,7 @@ explicit `ulp_precision` is a load-time error.
 
 ---
 
-## v0.1 — foundation
+## v0.1 -- foundation
 
 Initial release. Enough framework to obsolete the prior community
 `ctlrender`-stdout-grep approach for scalar and fixed-array tests.
@@ -327,21 +327,21 @@ Initial release. Enough framework to obsolete the prior community
 
 ## Known limitations (as of v1.1)
 
-- **Struct partial-default binding** — `FunctionArg::hasDefaultValue()` is
+- **Struct partial-default binding** -- `FunctionArg::hasDefaultValue()` is
   per-arg, not per-field. Struct literals in YAML must be complete;
   partial-struct `defaults: inherit` semantics are deferred.
-- **Varying struct outputs** — emit a "not yet supported" load-time error
+- **Varying struct outputs** -- emit a "not yet supported" load-time error
   in sweep/image mode. Flat-scalar and array-of-scalar outputs work in all
   modes.
-- **Tables > 64 elements** — must come from a sidecar CSV/cube via
+- **Tables > 64 elements** -- must come from a sidecar CSV/cube via
   `from_file:`; authoring raw `values:` arrays above this threshold is
   rejected at load time. The diffs would be unreadable anyway.
-- **`ulp_precision: half`/`native`** — reserved but not implemented; use
+- **`ulp_precision: half`/`native`** -- reserved but not implemented; use
   `ulp_precision: float` (or omit ULP in image mode).
-- **EXR read path** — ImageIO copies the ~100 LOC read path from
+- **EXR read path** -- ImageIO copies the ~100 LOC read path from
   `ctlrender/exr_file`. Unifying both into one module is deferred to a
   later release that touches `ctlrender`.
-- **Python bindings** — out of scope for v1.x.
+- **Python bindings** -- out of scope for v1.x.
 
 ## Directory layout reference
 
@@ -364,11 +364,11 @@ moduletest/
 
 ## Further reading
 
-- `moduletest/examples/README.md` — authoring guide, YAML vs CTL
+- `moduletest/examples/README.md` -- authoring guide, YAML vs CTL
   decision matrix.
-- `moduletest/examples/aces_output_transform.yaml` — realistic unit +
+- `moduletest/examples/aces_output_transform.yaml` -- realistic unit +
   image mixed-mode example.
-- `moduletest/examples/csv_sweep.yaml` — sweep-mode example.
-- `moduletest/examples/snapshot_approval.yaml` — snapshot-mode example.
-- `moduletest/examples/escape_hatch/` — CTL-native example with
+- `moduletest/examples/csv_sweep.yaml` -- sweep-mode example.
+- `moduletest/examples/snapshot_approval.yaml` -- snapshot-mode example.
+- `moduletest/examples/escape_hatch/` -- CTL-native example with
   `test_mymodule.ctl` and the driving `ctl_tests.yaml`.

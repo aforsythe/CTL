@@ -1,4 +1,4 @@
-// ctltest_run_one — executes a single YAML suite file and exits non-zero if
+// ctltest_run_one -- executes a single YAML suite file and exits non-zero if
 // any case did not pass. Intended to be invoked by CTest via add_test().
 
 #include "CaseModel.h"

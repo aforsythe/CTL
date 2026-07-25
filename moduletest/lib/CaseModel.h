@@ -11,7 +11,7 @@
 
 namespace ctltest {
 
-// Value — an authored or observed CTL value. Scalar leaves, plus recursive
+// Value -- an authored or observed CTL value. Scalar leaves, plus recursive
 // composition for arrays (Seq) and structs (Map).
 //
 // v0.1 supports: bool, int, uint, float (half authored as float then rounded
@@ -45,8 +45,8 @@ struct Value {
     std::string describe() const;   // short human form for diagnostics
 };
 
-// Tolerance — per-path tolerances compose from suite default -> test default
-// -> per_field overrides (keyed by dotted path like "out.r" or "out[2].g").
+// Tolerance -- per-path tolerances compose from suite default to test default
+// to per_field overrides (keyed by dotted path like "out.r" or "out[2].g").
 // per_channel mirrors per_field but keyed by EXR channel name (image mode).
 struct Tolerance {
     std::optional<double> abs;
@@ -66,7 +66,7 @@ struct Tolerance {
     }
 };
 
-// OracleSpec — v0.5 supports Inline, Csv, Exr, and Snapshot.
+// OracleSpec -- v0.5 supports Inline, Csv, Exr, and Snapshot.
 struct OracleSpec {
     enum class Kind { Inline, Csv, Exr, Snapshot };
 
@@ -101,21 +101,21 @@ struct OracleSpec {
     std::vector<std::string> ignoreOutputs;
 };
 
-// SweepSpec — used when TestCase::mode == Sweep. One CSV supplies the named
+// SweepSpec -- used when TestCase::mode == Sweep. One CSV supplies the named
 // inputs for N rows; the runner batches those N rows into lanes of
 // Interpreter::maxSamples() and invokes callFunction(N).
 struct SweepSpec {
     std::string inputsCsvPath;   // absolute path to inputs CSV
-    bool strict = true;          // unknown/missing columns -> load error; else warning
+    bool strict = true;          // unknown/missing columns give a load error; else a warning
 };
 
-// ImageSpec — used when TestCase::mode == Image. A source EXR is read into
+// ImageSpec -- used when TestCase::mode == Image. A source EXR is read into
 // per-channel float32 planes and fed through the CTL function pixel-by-pixel
 // (width*height samples, batched into maxSamples() lanes). Output channels
 // are collected into an Image and handed to ExrOracle for the diff.
 //
-// inputChannelMap : CTL input-arg name -> source EXR channel name.
-// outputChannelMap: destination EXR channel name -> CTL output-arg name.
+// inputChannelMap : CTL input-arg name to source EXR channel name.
+// outputChannelMap: destination EXR channel name to CTL output-arg name.
 // If either map is empty the runner assumes a natural {R,G,B,A} pass-through
 // by matching on shared names.
 struct ImageSpec {
@@ -131,7 +131,7 @@ struct ImageSpec {
     std::string ulpPrecision;
 };
 
-// TestCase — one concrete thing the runner executes.
+// TestCase -- one concrete thing the runner executes.
 struct TestCase {
     enum class Mode { Unit, Sweep, Image, CtlNative };
 
@@ -166,7 +166,7 @@ struct TestCase {
     bool knownFailure = false;
 };
 
-// Suite — a YAML document: a version header plus N test cases sharing
+// Suite -- a YAML document: a version header plus N test cases sharing
 // module_paths and defaults.
 struct Suite {
     int         version = 1;

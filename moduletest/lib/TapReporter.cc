@@ -63,7 +63,7 @@ void TapReporter::ensureHeader() {
 void TapReporter::onSuiteBegin(const std::string& suiteName, size_t /*totalCases*/) {
     ensureHeader();
     _currentSuite = suiteName;
-    // One "subtest" comment per suite boundary — readable but not semantic.
+    // One "subtest" comment per suite boundary -- readable but not semantic.
     _os << "# suite: " << (suiteName.empty() ? "(unnamed)" : suiteName) << "\n";
 }
 

@@ -1,7 +1,7 @@
 #ifndef CTLTEST_TEST_KIT_H
 #define CTLTEST_TEST_KIT_H
 
-// TestKit — a minimal CTL-native assertion surface.
+// TestKit -- a minimal CTL-native assertion surface.
 //
 // CTL authors can write test_*.ctl files that `import "testkit";` and call
 // testkit::expect_near_f(...) / testkit::fail(...). At runtime the framework
