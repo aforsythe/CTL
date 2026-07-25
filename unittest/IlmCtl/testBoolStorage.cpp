@@ -91,15 +91,29 @@ testBoolDoesNotDisturbItsNeighbour ()
     FunctionArgPtr  in   = func->findInputArg ("i");
     REQUIRE (in);
 
+    StructTypePtr st = in->type().cast<StructType>();
+    REQUIRE (st);
+
+    // Reach the second member through its recorded offset rather than through
+    // a "/" path.  Addressing it by path goes via Type::childElementV, which
+    // has its own offset bug on this branch, and this test is about the width
+    // of the bool write, not about path resolution.
+    size_t markerOffset = 0;
+    for (size_t i = 0; i < st->members().size(); ++i)
+        if (st->members()[i].name == "marker")
+            markerOffset = st->members()[i].offset;
+    REQUIRE (markerOffset != 0);
+
+    char* base = (char*) in->data();
     const int marker = 0x5a5a5a5a;
-    in->set (&marker, 0, 0, 1, "marker");
+    memcpy (base + markerOffset, &marker, sizeof (marker));
 
     const bool f = false;
     in->set (&f, 0, 0, 1, "flag");
 
-    // A write wider than the bool would have run into marker.
+    // A write wider than the bool would have reached into marker.
     int readBack = 0;
-    in->get (&readBack, 0, 0, 1, "marker");
+    memcpy (&readBack, base + markerOffset, sizeof (readBack));
     REQUIRE (readBack == marker);
 }
 
