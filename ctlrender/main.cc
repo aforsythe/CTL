@@ -202,6 +202,27 @@ const format_t &find_format(const char *fmt, const char *message = NULL)
 	exit(1);
 }
 
+//-----------------------------------------------------------------------------
+// Option matching.
+//
+// ctlrender accepts abbreviations of its long options ("-v" for "-verbose",
+// "-form" for "-format"); minlen is the shortest unambiguous abbreviation.
+//
+// The old spelling, strncmp(argv[0], opt, minlen), compared only the first
+// minlen characters of the option, so any argument sharing that prefix matched
+// too: "-nonsense" was accepted as "-noalpha".  Requiring the argument to be a
+// prefix of the option instead keeps "-noa" matching "-noalpha" while
+// "-nonsense" and "-noalphax" fall through to the unrecognized-option branch.
+//-----------------------------------------------------------------------------
+
+static bool opt_matches(const char *arg, const char *opt, size_t minlen)
+{
+	size_t arglen = strlen(arg);
+
+	return arglen >= minlen && arglen <= strlen(opt) &&
+	       !strncmp(arg, opt, arglen);
+}
+
 int verbosity = 1;
 
 //-----------------------------------------------------------------------------
@@ -312,7 +333,7 @@ int main(int argc, const char **argv)
 		new_ctl_operation.filename = NULL;
 		while (argc > 0)
 		{
-			if (!strncmp(argv[0], "-help", 2))
+			if (opt_matches(argv[0], "-help", 2))
 			{
 				if (argc > 1)
 				{
@@ -324,7 +345,7 @@ int main(int argc, const char **argv)
 				}
 				exit(1);
 			}
-			else if (!strncmp(argv[0], "-input_scale", 2))
+			else if (opt_matches(argv[0], "-input_scale", 2))
 			{
 				if (argc == 1)
 				{
@@ -351,7 +372,7 @@ int main(int argc, const char **argv)
 					argc--;
 				}
 			}
-			else if (!strncmp(argv[0], "-output_scale", 2))
+			else if (opt_matches(argv[0], "-output_scale", 2))
 			{
 				if (argc == 1)
 				{
@@ -378,7 +399,7 @@ int main(int argc, const char **argv)
 					argc--;
 				}
 			}
-			else if (!strncmp(argv[0], "-ctl", 3))
+			else if (opt_matches(argv[0], "-ctl", 3))
 			{
 				if (argc == 1)
 				{
@@ -399,7 +420,7 @@ int main(int argc, const char **argv)
 				argv++;
 				argc--;
 			}
-			else if (!strncmp(argv[0], "-format", 5))
+			else if (opt_matches(argv[0], "-format", 5))
 			{
 				if (argc == 1)
 				{
@@ -415,7 +436,7 @@ int main(int argc, const char **argv)
 				argv++;
 				argc--;
 			}
-            else if (!strncmp(argv[0], "-compression", 3))
+            else if (opt_matches(argv[0], "-compression", 3))
             {
                 if (argc == 1)
                 {
@@ -524,15 +545,15 @@ int main(int argc, const char **argv)
 				}
 				global_ctl_parameters.push_back(get_ctl_parameter(&argv, &argc, start_argc, "global", 2));
 			}
-			else if (!strncmp(argv[0], "-verbose", 2))
+			else if (opt_matches(argv[0], "-verbose", 2))
 			{
 				verbosity++;
 			}
-			else if (!strncmp(argv[0], "-quiet", 2))
+			else if (opt_matches(argv[0], "-quiet", 2))
 			{
 				verbosity--;
 			}
-			else if (!strncmp(argv[0], "-force", 5))
+			else if (opt_matches(argv[0], "-force", 5))
 			{
 				force_overwrite_output_file = TRUE;
 			}
@@ -540,7 +561,7 @@ int main(int argc, const char **argv)
 			{
 				no_batch_math = 1;
 			}
-			else if (!strncmp(argv[0], "-noalpha", 2))
+			else if (opt_matches(argv[0], "-noalpha", 2))
 			{
 				noalpha = TRUE;
 			}
