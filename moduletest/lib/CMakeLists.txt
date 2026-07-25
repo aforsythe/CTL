@@ -54,6 +54,9 @@ target_link_libraries(ctltest_core
     # not pull in, so Semaphore lands undefined without naming it here.
     $<$<TARGET_EXISTS:IlmBase::IlmThread>:IlmBase::IlmThread>
     $<$<TARGET_EXISTS:OpenEXR::IlmThread>:OpenEXR::IlmThread>
+    # Same story for zlib: the 2.x compressors call it directly and the static
+    # archives do not carry the dependency, so compressBound lands undefined.
+    $<$<TARGET_EXISTS:ZLIB::ZLIB>:ZLIB::ZLIB>
   PRIVATE
     ${CTLTEST_YAML_CPP_TARGET}
 )
