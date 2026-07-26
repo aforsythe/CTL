@@ -342,6 +342,45 @@ if(NOT MSVC AND (CMAKE_BUILD_TYPE STREQUAL "Release" OR
       add_compile_options($<$<CONFIG:Release>:-mcpu=native>)
     else()
       add_compile_options($<$<CONFIG:Release>:-march=native>)
+
+      # -march=native selects whatever the build host supports, and the
+      # compiler may then emit instructions that the assembler shipped
+      # beside it does not know.  GCC 12 emits AVX512-FP16 (vmovw) on a
+      # host that has it, but binutils only learned those mnemonics in
+      # 2.38, so a GCC 12 / binutils 2.37 pair -- Fedora 36 ships
+      # exactly that -- fails to assemble its own output:
+      #
+      #   Error: no such instruction: `vmovw 32(%rax),%xmm0'
+      #
+      # Compile a half-precision expression the way the real build will
+      # and see whether it survives the assembler.  If it does not, drop
+      # just that extension; the rest of -march=native still applies.
+      #
+      # The probe also fails on a compiler with no x86 _Float16 at all
+      # (GCC before 12).  That costs nothing: such a compiler does not
+      # know -mno-avx512fp16 either, so the guard below adds nothing,
+      # and it never emits the instructions in the first place.
+      include(CheckCXXSourceCompiles)
+      include(CheckCXXCompilerFlag)
+
+      set(_ctl_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+      set(CMAKE_REQUIRED_FLAGS "-march=native")
+      check_cxx_source_compiles("
+          _Float16 add_h (_Float16 a, _Float16 b) { return a + b; }
+          int main () { return 0; }
+        "
+        CTL_NATIVE_ARCH_BUILDS_FP16)
+      set(CMAKE_REQUIRED_FLAGS "${_ctl_saved_required_flags}")
+
+      if(NOT CTL_NATIVE_ARCH_BUILDS_FP16)
+        check_cxx_compiler_flag("-mno-avx512fp16" CTL_HAS_NO_AVX512FP16)
+        if(CTL_HAS_NO_AVX512FP16)
+          message(STATUS
+            "CTL_NATIVE_ARCH: this toolchain cannot build half-precision "
+            "code under -march=native; adding -mno-avx512fp16")
+          add_compile_options($<$<CONFIG:Release>:-mno-avx512fp16>)
+        endif()
+      endif()
     endif()
   endif()
   if(CTL_LTO)
