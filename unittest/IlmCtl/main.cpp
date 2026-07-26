@@ -56,6 +56,7 @@
 #include <testEdgeValues.h>
 #include <testEndOfLine.h>
 #include <testInlineHelpers.h>
+#include <testHelperRecognition.h>
 #include <testParser.h>
 #include <testConcurrentCalls.h>
 #include <testCppCall.h>
@@ -87,6 +88,7 @@ main (int argc, char *argv[])
     TEST (testSimdRegOwnership);
     TEST (testEdgeValues);
     TEST (testInlineHelpers);
+    TEST (testHelperRecognition);
     TEST (testConcurrentCalls);
     TEST (testUniformBoolDefault);
     TEST (testVaryingArrayIndex);

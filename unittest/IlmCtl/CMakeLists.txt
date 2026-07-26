@@ -8,6 +8,7 @@ set(SOURCES
 	testExc.cpp
 	testHugeInit.cpp
 	testInlineHelpers.cpp
+	testHelperRecognition.cpp
 	testParser.cpp
 	testSimdRegAddr.cpp
 	testSimdRegOwnership.cpp
@@ -48,6 +49,8 @@ file(COPY
 	example.ctl
 	testArray.ctl
 	testInlineHelpers.ctl
+	testHelperRecognition.ctl
+	testHelperRecognitionCanon.ctl
 	testCast.ctl
 	testComments.ctl
 	testCppCall.ctl

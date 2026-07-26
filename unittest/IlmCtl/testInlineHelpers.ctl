@@ -4,10 +4,17 @@
 //
 // Bodies below are copied verbatim from
 //   aces-core/lib/Lib.Academy.Utilities.ctl
-// at sync time.  isInlineableHelper() in CtlSimdSyntaxTree.cpp matches
-// these by name + float signature and substitutes a SimdCCallInst
-// routed through simdFunc1Arg/2Arg<Inline...Float>.  The C++ Inline
-// bodies in that file are bit-identical to these CTL bodies.
+// at sync time.  recognizeHelperBody() in CtlSimdSyntaxTree.cpp reads
+// each definition's body and, when it computes one of the operations
+// that has a built-in implementation, records that on the function's
+// symbol; call sites then emit a SimdCCallInst routed through
+// simdFunc1Arg/2Arg<Inline...Float>.  The C++ Inline bodies in that
+// file are bit-identical to these CTL bodies.
+//
+// Because recognition reads the body, these bodies have to stay
+// canonical for the substitution to happen at all.  testHelperRecognition
+// covers the other side of that decision: definitions that compute
+// something else keep their own behaviour.
 //
 // If aces-core revises a helper (e.g. wrap_to_360 starts handling
 // negative angles differently), the CTL body in this fixture must be

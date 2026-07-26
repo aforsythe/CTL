@@ -18,14 +18,17 @@ using namespace Ctl;
 using namespace std;
 
 
-// Pins the codegen substitutions in CtlSimdSyntaxTree.cpp:
-// SimdCallNode::generateCode swaps idiomatic Lib.Academy.Utilities
-// helpers for SimdCCallInst map to simdFunc1Arg/2Arg<Inline...Float>.  The
-// fixture (testInlineHelpers.ctl) defines those helpers verbatim from
-// aces-core; this test runs each substitution against IEEE-754 specials
-// and confirms bit-equality (with NaN-payload tolerance) against a
-// reference impl that mirrors the inline C++.  A divergence here means
-// the inline body has drifted from the CTL body.
+// Pins the codegen substitutions in CtlSimdSyntaxTree.cpp.  The fixture
+// (testInlineHelpers.ctl) defines the Lib.Academy.Utilities helpers
+// verbatim from aces-core, which is what makes them eligible for
+// substitution; this test runs each one against IEEE-754 specials and
+// confirms bit-equality (with NaN-payload tolerance) against a reference
+// impl that mirrors the inline C++.  A divergence here means the inline
+// body has drifted from the CTL body.
+//
+// This test cannot tell whether a substitution happened, since a
+// canonical body computes the same thing either way.  testHelperRecognition
+// checks that directly, in both directions.
 
 namespace {
 
