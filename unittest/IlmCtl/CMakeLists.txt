@@ -1,12 +1,12 @@
 set(SOURCES
 	main.cpp
-	testCppCall.cpp
+	testBoolStorage.cpp
+  testCppCall.cpp
 	testEndOfLine.cpp
 	testExamples.cpp
 	testHugeInit.cpp
 	testParser.cpp
 	testPathParser.cpp
-	testBoolStorage.cpp
 	testVarying.cpp
 	testVaryingLookup.cpp
 	testVaryingReturn.cpp
