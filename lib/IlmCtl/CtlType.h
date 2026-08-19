@@ -364,7 +364,7 @@ class BoolType: public DataType
     virtual bool		canPromoteFrom (const TypePtr &t) const;
     virtual bool		canCastFrom (const TypePtr &t) const;
 
-	virtual CDataType_e cDataType() const { return IntTypeEnum; };
+	virtual CDataType_e cDataType() const { return BoolTypeEnum; };  // storage is sizeof(bool), not sizeof(int)
 
     virtual ExprNodePtr		evaluate (LContext &lcontext,
 					  const ExprNodePtr &expr) const;

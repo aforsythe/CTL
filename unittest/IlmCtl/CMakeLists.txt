@@ -1,6 +1,7 @@
 set(SOURCES
 	main.cpp
-	testCppCall.cpp
+	testBoolStorage.cpp
+  testCppCall.cpp
 	testEndOfLine.cpp
 	testExamples.cpp
 	testHugeInit.cpp
@@ -38,6 +39,7 @@ add_test(IlmCtl IlmCtlTest)
 
 file(COPY
 	common.ctl
+	testBoolStorage.ctl
 	example.ctl
 	testArray.ctl
 	testCast.ctl
